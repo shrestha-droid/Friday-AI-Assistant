@@ -1,0 +1,5 @@
+friday_env/
+.env
+__pycache__/
+friday_memory.json
+*.DS_Store

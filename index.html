@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRIDAY // QUANTUM INTERFACE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --core: #9c3848;         /* deep crimson — idle/standby */
+            --core-glow: rgba(179, 19, 46, 0.35);
+            --signal: #3fd0ff;       /* electric blue — thinking/processing */
+            --signal-glow: rgba(63, 208, 255, 0.35);
+            --bg-0: #03060a;
+            --bg-1: #060c14;
+            --glass: rgba(8, 18, 26, 0.62);
+            --hair: rgba(88, 246, 232, 0.18);
+            --ink: #eaf6f5;
+            --ink-dim: rgba(234, 246, 245, 0.45);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: radial-gradient(ellipse at 50% 30%, var(--bg-1) 0%, var(--bg-0) 70%);
+            color: var(--ink);
+            font-family: 'JetBrains Mono', monospace;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        /* ---------- ambient scanline / grain ---------- */
+        #scanline {
+            position: absolute;
+            inset: 0;
+            z-index: 6;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(255,255,255,0.015) 0px,
+                rgba(255,255,255,0.015) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            mix-blend-mode: overlay;
+        }
+        #sweep {
+            position: absolute;
+            left: 0; right: 0;
+            height: 140px;
+            z-index: 6;
+            pointer-events: none;
+            background: linear-gradient(to bottom, transparent, rgba(88,246,232,0.05), transparent);
+            animation: sweepMove 7s linear infinite;
+        }
+        @keyframes sweepMove {
+            0% { top: -140px; }
+            100% { top: 100vh; }
+        }
+
+        #vignette {
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            pointer-events: none;
+            background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,0,0,0.65) 100%);
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 1;
+        }
+
+        /* ---------- corner brackets w/ ticks ---------- */
+        .hud-corner {
+            position: absolute;
+            width: 54px;
+            height: 54px;
+            z-index: 5;
+            opacity: 0.55;
+            pointer-events: none;
+        }
+        .hud-corner svg { width: 100%; height: 100%; }
+        .top-left { top: 22px; left: 22px; }
+        .top-right { top: 22px; right: 22px; transform: scaleX(-1); }
+        .bottom-left { bottom: 22px; left: 22px; transform: scaleY(-1); }
+        .bottom-right { bottom: 22px; right: 22px; transform: scale(-1, -1); }
+
+        /* ---------- top status strip ---------- */
+        #top-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            z-index: 7;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 100px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.78rem;
+            letter-spacing: 2px;
+            color: var(--ink-dim);
+            pointer-events: none;
+        }
+        #top-bar .brand {
+            color: var(--core);
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            text-shadow: 0 0 12px var(--core-glow);
+        }
+        #telemetry {
+            display: flex;
+            gap: 26px;
+        }
+        #telemetry span b {
+            color: var(--core);
+            font-weight: 600;
+        }
+        #top-bar .clock {
+            color: var(--ink-dim);
+            letter-spacing: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 980px) {
+            #telemetry { display: none; }
+            #top-bar { padding: 16px 20px; }
+        }
+
+        /* ---------- LEFT DOCK — telemetry / voice link / memory array ---------- */
+        #left-dock {
+            position: absolute;
+            top: 50%;
+            left: 26px;
+            transform: translateY(-50%);
+            z-index: 5;
+            width: 190px;
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--glass);
+            border: 1px solid var(--hair);
+            backdrop-filter: blur(10px);
+            padding: 18px 16px;
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+        }
+        #left-dock .dock-title {
+            font-size: 0.68rem;
+            letter-spacing: 3px;
+            color: var(--core);
+            font-weight: 700;
+            text-shadow: 0 0 10px var(--core-glow);
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--hair);
+        }
+        .panel-block { padding: 6px 0; margin-bottom: 14px; }
+        .panel-block:last-child { margin-bottom: 0; }
+        .panel-label {
+            font-size: 0.64rem;
+            letter-spacing: 2px;
+            color: var(--ink-dim);
+            text-transform: uppercase;
+        }
+        .panel-value {
+            font-size: 0.98rem;
+            color: var(--core);
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .bar-row { display: flex; gap: 3px; margin-top: 6px; }
+        .bar-seg { width: 6px; height: 12px; background: var(--hair); }
+        .bar-seg.on { background: var(--core); box-shadow: 0 0 6px var(--core-glow); }
+
+        @media (max-width: 980px) {
+            #left-dock { display: none; }
+        }
+
+        /* ---------- file dropper ---------- */
+        #drop-zone {
+            position: absolute;
+            top: 74px;
+            left: 26px;
+            width: 190px;
+            padding: 12px;
+            z-index: 10;
+            border: 1px solid var(--hair);
+            background: var(--glass);
+            backdrop-filter: blur(6px);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.72rem;
+            letter-spacing: 1.5px;
+            color: var(--ink-dim);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+        #drop-zone.dragover {
+            border-color: var(--core);
+            color: var(--core);
+            box-shadow: 0 0 20px var(--core-glow);
+        }
+
+        @media (max-width: 980px) {
+            #drop-zone { left: auto; right: 20px; top: 66px; width: 150px; }
+        }
+
+        /* ---------- RIGHT DOCK — comms / chatbox panel ---------- */
+        #right-dock {
+            position: absolute;
+            top: 74px;
+            bottom: 26px;
+            right: 26px;
+            z-index: 5;
+            width: 340px;
+            display: flex;
+            flex-direction: column;
+            background: var(--glass);
+            border: 1px solid var(--hair);
+            backdrop-filter: blur(12px);
+            clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+            box-shadow: 0 0 30px rgba(0,0,0,0.35);
+        }
+
+        #dock-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--hair);
+            font-family: 'Rajdhani', sans-serif;
+            flex-shrink: 0;
+        }
+        #status-dot {
+            width: 7px; height: 7px;
+            background: var(--core);
+            box-shadow: 0 0 10px var(--core);
+            animation: pulse-dot 1.4s infinite alternate;
+            flex-shrink: 0;
+        }
+        @keyframes pulse-dot {
+            0% { opacity: 0.35; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.3); }
+        }
+        #status {
+            font-size: 0.7rem;
+            color: var(--core);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        #message-log {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        #message-log::-webkit-scrollbar { width: 4px; }
+        #message-log::-webkit-scrollbar-thumb { background: var(--hair); }
+
+        .msg { max-width: 100%; }
+        .msg .who {
+            display: block;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+        .msg.you .who { color: var(--ink-dim); }
+        .msg.ai .who { color: var(--core); text-shadow: 0 0 8px var(--core-glow); }
+        .msg.you .body { color: var(--ink); opacity: 0.85; }
+        .msg.ai .body { color: var(--ink); }
+        .msg.system .who { color: var(--signal); }
+        .msg.system .body { color: var(--ink-dim); font-style: italic; }
+
+        /* ---------- waveform ---------- */
+        #waveform {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 3px;
+            height: 20px;
+            padding: 0 18px;
+            flex-shrink: 0;
+        }
+        #waveform .bar {
+            width: 3px;
+            background: var(--core);
+            opacity: 0.55;
+            box-shadow: 0 0 5px var(--core-glow);
+            transition: height 0.12s ease;
+        }
+
+        /* ---------- command bar (docked at bottom of right panel) ---------- */
+        #command-bar {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid var(--hair);
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        #command-bar:focus-within {
+            box-shadow: inset 0 0 24px var(--core-glow);
+        }
+        .prefix-label {
+            padding-left: 18px;
+            font-size: 0.82rem;
+            color: var(--core);
+            font-weight: 700;
+            letter-spacing: 1px;
+            font-family: 'Rajdhani', sans-serif;
+        }
+        #chat-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--ink);
+            padding: 15px 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            outline: none;
+            letter-spacing: 0.5px;
+            min-width: 0;
+        }
+        #chat-input::placeholder { color: rgba(234,246,245,0.28); }
+
+        #mic-btn {
+            background: transparent;
+            border: none;
+            border-left: 1px solid var(--hair);
+            color: var(--core);
+            padding: 0 20px;
+            height: 100%;
+            min-height: 48px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+        }
+        #mic-btn:hover {
+            background: var(--core);
+            color: var(--bg-0);
+            box-shadow: 0 0 18px var(--core-glow);
+        }
+
+        @media (max-width: 980px) {
+            #right-dock {
+                left: 16px;
+                right: 16px;
+                width: auto;
+                top: auto;
+                height: 46vh;
+                bottom: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="vignette"></div>
+    <div id="scanline"></div>
+    <div id="sweep"></div>
+
+    <div class="hud-corner top-left"><svg viewBox="0 0 54 54"><path d="M2 20 L2 2 L20 2" stroke="var(--core)" stroke-width="1.5" fill="none"/><path d="M2 30 L2 40" stroke="var(--core)" stroke-width="1.5"/><path d="M30 2 L40 2" stroke="var(--core)" stroke-width="1.5"/></svg></div>
+    <div class="hud-corner top-right"><svg viewBox="0 0 54 54"><path d="M2 20 L2 2 L20 2" stroke="var(--core)" stroke-width="1.5" fill="none"/><path d="M2 30 L2 40" stroke="var(--core)" stroke-width="1.5"/><path d="M30 2 L40 2" stroke="var(--core)" stroke-width="1.5"/></svg></div>
+    <div class="hud-corner bottom-left"><svg viewBox="0 0 54 54"><path d="M2 20 L2 2 L20 2" stroke="var(--core)" stroke-width="1.5" fill="none"/><path d="M2 30 L2 40" stroke="var(--core)" stroke-width="1.5"/><path d="M30 2 L40 2" stroke="var(--core)" stroke-width="1.5"/></svg></div>
+    <div class="hud-corner bottom-right"><svg viewBox="0 0 54 54"><path d="M2 20 L2 2 L20 2" stroke="var(--core)" stroke-width="1.5" fill="none"/><path d="M2 30 L2 40" stroke="var(--core)" stroke-width="1.5"/><path d="M30 2 L40 2" stroke="var(--core)" stroke-width="1.5"/></svg></div>
+
+    <div id="top-bar">
+        <div class="brand">F.R.I.D.A.Y.</div>
+        <div id="telemetry">
+            <span>CORE&nbsp;<b id="tel-core">100%</b></span>
+            <span>LATENCY&nbsp;<b id="tel-lat">12ms</b></span>
+            <span>UPLINK&nbsp;<b id="tel-up">STABLE</b></span>
+        </div>
+        <div class="clock" id="hud-clock">00:00:00</div>
+    </div>
+
+    <div id="left-dock">
+        <div class="dock-title">SYSTEM TELEMETRY</div>
+        <div class="panel-block">
+            <div class="panel-label">Neural Load</div>
+            <div class="panel-value">42.7%</div>
+            <div class="bar-row" id="bar-left-1"></div>
+        </div>
+        <div class="panel-block">
+            <div class="panel-label">Signal Band</div>
+            <div class="panel-value">7.4 GHz</div>
+            <div class="bar-row" id="bar-left-2"></div>
+        </div>
+        <div class="panel-block">
+            <div class="panel-label">Memory Array</div>
+            <div class="panel-value">OK</div>
+            <div class="bar-row" id="bar-right-1"></div>
+        </div>
+        <div class="panel-block">
+            <div class="panel-label">Voice Link</div>
+            <div class="panel-value" id="voice-link-status">IDLE</div>
+            <div class="bar-row" id="bar-right-2"></div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="drop-zone">
+        [ DRAG &amp; DROP FILE ]<br>SYSTEM ANALYSIS
+    </div>
+
+    <div id="right-dock">
+        <div id="dock-header">
+            <div id="status-dot"></div>
+            <div id="status">System Asleep</div>
+        </div>
+
+        <div id="message-log"></div>
+
+        <div id="waveform"></div>
+
+        <div id="command-bar">
+            <span class="prefix-label">FRIDAY&gt;</span>
+            <input type="text" id="chat-input" placeholder="Enter protocol or direct command..." autocomplete="off">
+            <button id="mic-btn" onclick="toggleListening()" title="Toggle Voice Link">LINK</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. FRIDAY QUANTUM CORE — 3D STRUCTURE
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5.4;
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const coreGroup = new THREE.Group();
+        scene.add(coreGroup);
+
+        // Drifting starfield — depth behind the core
+        const starGeo = new THREE.BufferGeometry();
+        const STAR_COUNT = 900;
+        const starPositions = new Float32Array(STAR_COUNT * 3);
+        for (let i = 0; i < STAR_COUNT; i++) {
+            const r = 8 + Math.random() * 26;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            starPositions[i * 3 + 2] = r * Math.cos(phi) - 6;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({
+            color: 0x9fb8c2, size: 0.045, transparent: true, opacity: 0.5,
+            blending: THREE.AdditiveBlending, sizeAttenuation: true
+        });
+        const starField = new THREE.Points(starGeo, starMat);
+        scene.add(starField);
+
+        // Central dense node
+        const coreGeo = new THREE.IcosahedronGeometry(0.72, 1);
+        const coreMat = new THREE.MeshBasicMaterial({
+            color: 0xb3132e,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending
+        });
+        const innerMind = new THREE.Mesh(coreGeo, coreMat);
+        coreGroup.add(innerMind);
+
+        // Organic shifting neural shell
+        const shellGeo = new THREE.IcosahedronGeometry(1.35, 3);
+        const shellMat = new THREE.MeshBasicMaterial({
+            color: 0xb3132e,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.22,
+            blending: THREE.AdditiveBlending
+        });
+        const neuralShell = new THREE.Mesh(shellGeo, shellMat);
+        coreGroup.add(neuralShell);
+
+        const positionAttribute = shellGeo.attributes.position;
+        const originalVertices = [];
+        for (let i = 0; i < positionAttribute.count; i++) {
+            originalVertices.push(new THREE.Vector3(
+                positionAttribute.getX(i),
+                positionAttribute.getY(i),
+                positionAttribute.getZ(i)
+            ));
+        }
+
+        // Signature element: two tilted orbital rings with node particles
+        function buildRing(radius, tilt, color, nodeCount) {
+            const group = new THREE.Group();
+            const ringGeo = new THREE.RingGeometry(radius - 0.01, radius, 128, 1);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color, side: THREE.DoubleSide, transparent: true, opacity: 0.18,
+                blending: THREE.AdditiveBlending, wireframe: true
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            group.add(ring);
+
+            const nodeGeo = new THREE.SphereGeometry(0.028, 8, 8);
+            const nodeMat = new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending });
+            const nodes = [];
+            for (let i = 0; i < nodeCount; i++) {
+                const node = new THREE.Mesh(nodeGeo, nodeMat);
+                const angle = (i / nodeCount) * Math.PI * 2;
+                node.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+                group.add(node);
+                nodes.push(node);
+            }
+            group.rotation.x = tilt;
+            coreGroup.add(group);
+            return { group, nodes, radius };
+        }
+
+        const ringA = buildRing(2.05, Math.PI / 2.6, 0xb3132e, 10);
+        const ringB = buildRing(2.55, Math.PI / 1.7, 0x3fd0ff, 6);
+
+        // Expanding activation pulses (spawned on tap/click)
+        const activePulses = [];
+        function spawnPulse(color) {
+            const geo = new THREE.RingGeometry(0.9, 0.98, 64);
+            const mat = new THREE.MeshBasicMaterial({
+                color, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = Math.PI / 2.4;
+            coreGroup.add(mesh);
+            activePulses.push({ mesh, life: 0 });
+        }
+
+        let targetScale = 1;
+        let baseSpeed = 0.003;
+        let activeSpeedMult = 1;
+        let hovered = false;
+
+        // ---- Tap / click the core to wake FRIDAY ----
+        // Invisible, slightly oversized sphere = a forgiving hit target (helps on mobile/trackpad)
+        const hitSphereGeo = new THREE.SphereGeometry(1.55, 16, 16);
+        const hitSphereMat = new THREE.MeshBasicMaterial({ visible: false });
+        const hitSphere = new THREE.Mesh(hitSphereGeo, hitSphereMat);
+        coreGroup.add(hitSphere);
+
+        const raycaster = new THREE.Raycaster();
+        const pointerVec = new THREE.Vector2();
+        const hitTargets = [hitSphere];
+
+        function setPointerFromEvent(clientX, clientY) {
+            pointerVec.x = (clientX / window.innerWidth) * 2 - 1;
+            pointerVec.y = -(clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function coreIntersected() {
+            raycaster.setFromCamera(pointerVec, camera);
+            return raycaster.intersectObjects(hitTargets, false).length > 0;
+        }
+
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            setPointerFromEvent(e.clientX, e.clientY);
+            const hit = coreIntersected();
+            if (hit !== hovered) {
+                hovered = hit;
+                renderer.domElement.style.cursor = hovered ? 'pointer' : 'default';
+            }
+        });
+
+        function handleCoreActivate(clientX, clientY) {
+            setPointerFromEvent(clientX, clientY);
+            if (!coreIntersected()) return;
+            toggleListening();
+        }
+
+        renderer.domElement.addEventListener('click', (e) => handleCoreActivate(e.clientX, e.clientY));
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                const t = e.touches[0];
+                handleCoreActivate(t.clientX, t.clientY);
+            }
+        }, { passive: true });
+
+        // ---- Tiny synthesized activation chirp (no audio assets needed) ----
+        let audioCtx = null;
+        function playChirp(wakingUp) {
+            try {
+                audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                const startFreq = wakingUp ? 340 : 520;
+                const endFreq = wakingUp ? 900 : 260;
+                osc.frequency.setValueAtTime(startFreq, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, audioCtx.currentTime + 0.18);
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.22);
+            } catch (e) { /* audio unavailable, fail silently */ }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const speed = baseSpeed * activeSpeedMult;
+            const time = Date.now() * 0.001;
+
+            innerMind.rotation.x += speed * 2.0;
+            innerMind.rotation.y += speed * 2.5;
+
+            neuralShell.rotation.y -= speed * 1.2;
+            neuralShell.rotation.z += speed * 0.8;
+
+            for (let i = 0; i < positionAttribute.count; i++) {
+                const v = originalVertices[i];
+                const noise = Math.sin(v.x * 2 + time) * Math.cos(v.y * 2 + time) * 0.18;
+                const currentV = v.clone().normalize().multiplyScalar(1.35 + noise);
+                positionAttribute.setXYZ(i, currentV.x, currentV.y, currentV.z);
+            }
+            positionAttribute.needsUpdate = true;
+
+            ringA.group.rotation.z += speed * 1.1;
+            ringB.group.rotation.z -= speed * 0.7;
+
+            // Hover glow: gentle brighten + scale nudge when the pointer is over the core
+            const hoverTarget = hovered ? 1.08 : 1;
+            coreGroup.scale.lerp(new THREE.Vector3(targetScale * hoverTarget, targetScale * hoverTarget, targetScale * hoverTarget), 0.1);
+            coreMat.opacity += ((hovered ? 1 : 0.9) - coreMat.opacity) * 0.1;
+
+            coreGroup.rotation.y = Math.sin(time * 0.15) * 0.15;
+
+            // Slow ambient starfield drift
+            starField.rotation.y += 0.00025;
+            starField.rotation.x += 0.00008;
+
+            // Expanding activation pulses
+            for (let i = activePulses.length - 1; i >= 0; i--) {
+                const p = activePulses[i];
+                p.life += 0.02;
+                const s = 1 + p.life * 3.2;
+                p.mesh.scale.set(s, s, s);
+                p.mesh.material.opacity = Math.max(0, 0.9 - p.life * 1.1);
+                if (p.life >= 1) {
+                    coreGroup.remove(p.mesh);
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                    activePulses.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // ==========================================
+        // 2. DECORATIVE TELEMETRY (ambient life)
+        // ==========================================
+        function fillBars(id, total, onCount) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const seg = document.createElement('div');
+                seg.className = 'bar-seg' + (i < onCount ? ' on' : '');
+                el.appendChild(seg);
+            }
+        }
+        function randomizeTelemetry() {
+            document.getElementById('tel-core').textContent = (94 + Math.random() * 6).toFixed(1) + '%';
+            document.getElementById('tel-lat').textContent = (8 + Math.random() * 9).toFixed(0) + 'ms';
+            fillBars('bar-left-1', 10, 3 + Math.floor(Math.random() * 5));
+            fillBars('bar-left-2', 10, 4 + Math.floor(Math.random() * 4));
+            fillBars('bar-right-1', 10, 6 + Math.floor(Math.random() * 4));
+        }
+        randomizeTelemetry();
+        setInterval(randomizeTelemetry, 2200);
+
+        // Live clock, top bar
+        function updateClock() {
+            const el = document.getElementById('hud-clock');
+            if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Waveform bars
+        const waveformEl = document.getElementById('waveform');
+        const WAVE_BARS = 28;
+        const waveEls = [];
+        for (let i = 0; i < WAVE_BARS; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            bar.style.height = '3px';
+            waveformEl.appendChild(bar);
+            waveEls.push(bar);
+        }
+        let waveActive = false;
+        function animateWaveform() {
+            waveEls.forEach(bar => {
+                const h = waveActive ? (4 + Math.random() * 18) : (2 + Math.random() * 2);
+                bar.style.height = h + 'px';
+            });
+            requestAnimationFrame(animateWaveform);
+        }
+        animateWaveform();
+
+        // ==========================================
+        // 3. FRIDAY HUD LOGIC
+        // ==========================================
+        const messageLog = document.getElementById('message-log');
+        const statusDiv = document.getElementById('status');
+        const chatInput = document.getElementById('chat-input');
+        const dropZone = document.getElementById('drop-zone');
+        const voiceLinkStatus = document.getElementById('voice-link-status');
+
+        // Appends a line to the right-hand comms panel and auto-scrolls to it
+        function addMessage(kind, who, text) {
+            const row = document.createElement('div');
+            row.className = 'msg ' + kind;
+            const whoEl = document.createElement('span');
+            whoEl.className = 'who';
+            whoEl.textContent = who;
+            const bodyEl = document.createElement('span');
+            bodyEl.className = 'body';
+            bodyEl.textContent = text;
+            row.appendChild(whoEl);
+            row.appendChild(bodyEl);
+            messageLog.appendChild(row);
+            messageLog.scrollTop = messageLog.scrollHeight;
+            return bodyEl;
+        }
+
+        let systemState = "OFF";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        const synth = window.speechSynthesis;
+
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+                const command = chatInput.value.trim();
+                chatInput.value = '';
+                sendToBrain(command);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                dropZone.innerHTML = `[ ANALYZING ]<br>${file.name}`;
+                sendToBrain(`I have uploaded a file named: ${file.name}. Acknowledge transmission.`);
+                setTimeout(() => { dropZone.innerHTML = `[ DRAG &amp; DROP FILE ]<br>SYSTEM ANALYSIS`; }, 4000);
+            }
+        });
+
+        function toggleListening() {
+            const wakingUp = systemState === "OFF";
+            playChirp(wakingUp);
+            spawnPulse(wakingUp ? 0xb3132e : 0x3fd0ff);
+
+            if (wakingUp) {
+                systemState = "STANDBY";
+                setVisualTheme("core");
+                statusDiv.textContent = "STANDBY // SAY 'FRIDAY'";
+                voiceLinkStatus.textContent = "ACTIVE";
+                recognition.start();
+            } else {
+                systemState = "OFF";
+                recognition.stop();
+                statusDiv.textContent = "SYSTEM OFFLINE";
+                voiceLinkStatus.textContent = "IDLE";
+                targetScale = 0.55;
+                waveActive = false;
+            }
+        }
+
+        function setVisualTheme(mode) {
+            // mode: "core" (cyan, idle/standby) or "signal" (amber, processing)
+            const isSignal = mode === "signal";
+            targetScale = isSignal ? 1.22 : 1;
+            activeSpeedMult = isSignal ? 4 : 1;
+            waveActive = isSignal;
+
+            const hex = isSignal ? 0x3fd0ff : 0xb3132e;
+            coreMat.color.setHex(hex);
+            shellMat.color.setHex(hex);
+
+            document.documentElement.style.setProperty('--core', isSignal ? '#3fd0ff' : '#b3132e');
+            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(63,208,255,0.35)' : 'rgba(179,19,46,0.35)');
+        }
+
+        recognition.onresult = async function(event) {
+            const rawText = event.results[0][0].transcript.trim();
+            const textLower = rawText.toLowerCase();
+
+            if (textLower.includes("goodnight") || textLower.includes("shut down")) {
+                addMessage('you', 'You', rawText);
+                statusDiv.textContent = "SYSTEM OFFLINE";
+                targetScale = 0.55;
+                waveActive = false;
+                speakText("Shutting down core protocols. Goodnight.");
+                systemState = "OFF";
+                voiceLinkStatus.textContent = "IDLE";
+                return;
+            }
+
+            if (systemState === "STANDBY") {
+                if (textLower.includes("friday")) {
+                    systemState = "PROCESSING";
+                    let command = rawText.replace(/friday/gi, "").trim();
+                    if (command === "") {
+                        targetScale = 1.3;
+                        setTimeout(() => { setVisualTheme("core"); }, 500);
+                        speakText("Online.");
+                        systemState = "STANDBY";
+                        return;
+                    } else {
+                        await sendToBrain(command);
+                    }
+                }
+                return;
+            }
+        };
+
+        recognition.onend = function() {
+            if (systemState !== "OFF") {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+
+        async function sendToBrain(userText) {
+            addMessage('you', 'You', userText);
+            statusDiv.textContent = "PROCESSING PROTOCOL...";
+
+            setVisualTheme("signal");
+
+            try {
+                const response = await fetch('http://localhost:8000/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: userText })
+                });
+
+                const data = await response.json();
+                addMessage('ai', 'Friday', data.response);
+
+                setVisualTheme("core");
+                speakText(data.response);
+
+                if (systemState !== "OFF") {
+                    systemState = "STANDBY";
+                    statusDiv.textContent = "STANDBY // SAY 'FRIDAY'";
+                }
+
+            } catch (error) {
+                addMessage('system', 'System', 'Error connecting to Python backend.');
+                statusDiv.textContent = "CONNECTION LOST";
+                systemState = "OFF";
+                waveActive = false;
+            }
+        }
+
+        // ==========================================
+        // 4. BOOT SEQUENCE — plays once on page load
+        // ==========================================
+        (function bootSequence() {
+            const lines = [
+                "INITIALIZING CORE MATRIX...",
+                "CALIBRATING NEURAL SHELL...",
+                "UPLINK ESTABLISHED.",
+                "Tap the core, or say 'FRIDAY', to wake me."
+            ];
+            let li = 0, ci = 0;
+            statusDiv.textContent = "BOOTING";
+            targetScale = 0.4;
+            setTimeout(() => { targetScale = 1; }, 300);
+
+            let currentBody = addMessage('system', 'System', '');
+
+            function typeLine() {
+                if (li >= lines.length) {
+                    statusDiv.textContent = "SYSTEM ASLEEP";
+                    return;
+                }
+                const line = lines[li];
+                currentBody.textContent = line.slice(0, ci);
+                messageLog.scrollTop = messageLog.scrollHeight;
+                ci++;
+                if (ci <= line.length) {
+                    setTimeout(typeLine, li === lines.length - 1 ? 26 : 18);
+                } else {
+                    li++; ci = 0;
+                    if (li < lines.length) {
+                        setTimeout(() => {
+                            currentBody = addMessage('system', 'System', '');
+                            typeLine();
+                        }, 260);
+                    } else {
+                        statusDiv.textContent = "SYSTEM ASLEEP";
+                    }
+                }
+            }
+            setTimeout(typeLine, 250);
+        })();
+
+        function speakText(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voices = synth.getVoices();
+            const samantha = voices.find(v => v.name === 'Samantha');
+            if (samantha) utterance.voice = samantha;
+            utterance.rate = 1.1;
+            synth.speak(utterance);
+        }
+    </script>
+</body>
+</html>
