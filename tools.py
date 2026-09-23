@@ -126,7 +126,7 @@ def shutdown_system():
 def analyze_screen():
     """Takes a silent screenshot of the Mac screen and tells Friday exactly what is visible safely."""
     try:
-        subprocess.run(["screencapture", "-x", "temp_screen.jpg"])
+        subprocess.run(["screencapture", "-x", "temp_screen.jpg"], check=True)
         
         temp_client = genai.Client()
         default_model = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
@@ -146,4 +146,7 @@ def analyze_screen():
         return f"Failed to analyze screen: {str(e)}"
     finally:
         if os.path.exists("temp_screen.jpg"):
-            os.remove("temp_screen.jpg")
+            try:
+                os.remove("temp_screen.jpg")
+            except OSError:
+                pass

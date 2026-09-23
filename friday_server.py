@@ -64,7 +64,7 @@ def query_memory(query: str):
     return "No relevant information found in memory."
 
 def get_system_stats():
-    cpu = psutil.cpu_percent(interval=1)
+    cpu = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory().percent
     disk = psutil.disk_usage('/').percent
     return f"MacBook Status -> CPU: {cpu}% | RAM: {ram}% | Disk: {disk}%"
