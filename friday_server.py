@@ -3,7 +3,7 @@ import json
 import subprocess
 import psutil
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -165,7 +165,10 @@ async def handle_command(request: CommandRequest):
         
     except Exception as e:
         print(f"[System Error]: {str(e)}")
-        return {"response": "I encountered an internal system error."}
+        raise HTTPException(
+            status_code=502,
+            detail="The AI service is unavailable. Check the Gemini API credentials."
+        ) from e
 
 if __name__ == "__main__":
     import uvicorn

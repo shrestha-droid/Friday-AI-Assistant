@@ -4,6 +4,10 @@ import subprocess
 import webbrowser
 import rumps
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VENV_PYTHON = os.path.join(BASE_DIR, "friday_env", "bin", "python")
+PYTHON_EXECUTABLE = VENV_PYTHON if os.path.exists(VENV_PYTHON) else sys.executable
+
 class FridayMenuBarApp(rumps.App):
     def __init__(self):
         # Swapped to the lightning bolt for the active state
@@ -11,8 +15,8 @@ class FridayMenuBarApp(rumps.App):
 
         # Start the backend server silently in the background
         self.server_process = subprocess.Popen(
-            [sys.executable, "friday_server.py"],
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            [PYTHON_EXECUTABLE, "friday_server.py"],
+            cwd=BASE_DIR
         )
 
         self.status_toggle = rumps.MenuItem("System Active", callback=self.toggle_system)
@@ -34,8 +38,8 @@ class FridayMenuBarApp(rumps.App):
             self.title = "⚡ Friday"
             if not self.server_process or self.server_process.poll() is not None:
                 self.server_process = subprocess.Popen(
-                    [sys.executable, "friday_server.py"],
-                    cwd=os.path.dirname(os.path.abspath(__file__))
+                    [PYTHON_EXECUTABLE, "friday_server.py"],
+                    cwd=BASE_DIR
                 )
             rumps.notification("Friday OS", "Status", "Friday is online.")
         else:
@@ -54,8 +58,8 @@ class FridayMenuBarApp(rumps.App):
             self.server_process.terminate()
 
         self.server_process = subprocess.Popen(
-            [sys.executable, "friday_server.py"],
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            [PYTHON_EXECUTABLE, "friday_server.py"],
+            cwd=BASE_DIR
         )
 
         self.status_toggle.state = True

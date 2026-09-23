@@ -869,13 +869,16 @@
             setVisualTheme("signal");
 
             try {
-                const response = await fetch('http://localhost:8000/api/command', {
+                const response = await fetch('/api/command', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: userText })
                 });
 
                 const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'The AI service is unavailable.');
+                }
                 addMessage('ai', 'Friday', data.response);
 
                 setVisualTheme("core");
@@ -887,8 +890,8 @@
                 }
 
             } catch (error) {
-                addMessage('system', 'System', 'Error connecting to Python backend.');
-                statusDiv.textContent = "CONNECTION LOST";
+                addMessage('system', 'System', error.message || 'The backend could not process the command.');
+                statusDiv.textContent = "AI LINK UNAVAILABLE";
                 systemState = "OFF";
                 waveActive = false;
             }
