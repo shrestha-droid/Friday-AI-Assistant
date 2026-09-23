@@ -9,16 +9,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --core: #00f0ff;         /* ultron/jarvis high-tech electric cyan — idle/standby */
-            --core-glow: rgba(0, 240, 255, 0.6);
-            --signal: #ffb700;       /* stark gold — thinking/processing */
-            --signal-glow: rgba(255, 183, 0, 0.6);
-            --bg-0: #02060c;
-            --bg-1: #061122;
-            --glass: rgba(4, 16, 28, 0.85);
-            --hair: rgba(0, 240, 255, 0.35);
-            --ink: #f0ffff;
-            --ink-dim: rgba(240, 255, 255, 0.55);
+            --core: #ff2a2a;         /* crimson redish high-tech core — idle/standby */
+            --core-glow: rgba(255, 42, 42, 0.75);
+            --signal: #ff9900;       /* fiery orange gold — thinking/processing */
+            --signal-glow: rgba(255, 153, 0, 0.75);
+            --bg-0: #0d0103;
+            --bg-1: #1f0307;
+            --glass: rgba(18, 4, 7, 0.9);
+            --hair: rgba(255, 42, 42, 0.4);
+            --ink: #fff0f2;
+            --ink-dim: rgba(255, 240, 242, 0.6);
         }
 
         * { box-sizing: border-box; }
@@ -42,8 +42,8 @@
             pointer-events: none;
             background: repeating-linear-gradient(
                 to bottom,
-                rgba(255,255,255,0.015) 0px,
-                rgba(255,255,255,0.015) 1px,
+                rgba(255,0,0,0.03) 0px,
+                rgba(255,0,0,0.03) 1px,
                 transparent 1px,
                 transparent 3px
             );
@@ -55,7 +55,7 @@
             height: 140px;
             z-index: 6;
             pointer-events: none;
-            background: linear-gradient(to bottom, transparent, rgba(88,246,232,0.05), transparent);
+            background: linear-gradient(to bottom, transparent, rgba(255,42,42,0.08), transparent);
             animation: sweepMove 7s linear infinite;
         }
         @keyframes sweepMove {
@@ -484,7 +484,7 @@
         // Central dense node
         const coreGeo = new THREE.IcosahedronGeometry(0.72, 1);
         const coreMat = new THREE.MeshBasicMaterial({
-            color: 0x00f0ff,
+            color: 0xff2a2a,
             wireframe: true,
             transparent: true,
             opacity: 0.95,
@@ -496,7 +496,7 @@
         // Organic shifting neural shell
         const shellGeo = new THREE.IcosahedronGeometry(1.35, 3);
         const shellMat = new THREE.MeshBasicMaterial({
-            color: 0x00f0ff,
+            color: 0xff2a2a,
             wireframe: true,
             transparent: true,
             opacity: 0.28,
@@ -541,8 +541,8 @@
             return { group, nodes, radius };
         }
 
-        const ringA = buildRing(2.05, Math.PI / 2.6, 0x00f0ff, 10);
-        const ringB = buildRing(2.55, Math.PI / 1.7, 0xffb700, 6);
+        const ringA = buildRing(2.05, Math.PI / 2.6, 0xff2a2a, 10);
+        const ringB = buildRing(2.55, Math.PI / 1.7, 0xff9900, 6);
 
         // Expanding activation pulses (spawned on tap/click)
         const activePulses = [];
@@ -796,7 +796,7 @@
         function toggleListening() {
             const wakingUp = systemState === "OFF";
             playChirp(wakingUp);
-            spawnPulse(wakingUp ? 0x00f0ff : 0xffb700);
+            spawnPulse(wakingUp ? 0xff2a2a : 0xff9900);
 
             if (wakingUp) {
                 systemState = "STANDBY";
@@ -815,18 +815,18 @@
         }
 
         function setVisualTheme(mode) {
-            // mode: "core" (cyan, idle/standby) or "signal" (gold, processing)
+            // mode: "core" (red, idle/standby) or "signal" (orange gold, processing)
             const isSignal = mode === "signal";
             targetScale = isSignal ? 1.22 : 1;
             activeSpeedMult = isSignal ? 4 : 1;
             waveActive = isSignal;
 
-            const hex = isSignal ? 0xffb700 : 0x00f0ff;
+            const hex = isSignal ? 0xff9900 : 0xff2a2a;
             coreMat.color.setHex(hex);
             shellMat.color.setHex(hex);
 
-            document.documentElement.style.setProperty('--core', isSignal ? '#ffb700' : '#00f0ff');
-            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(255,183,0,0.6)' : 'rgba(0,240,255,0.6)');
+            document.documentElement.style.setProperty('--core', isSignal ? '#ff9900' : '#ff2a2a');
+            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(255,153,0,0.75)' : 'rgba(255,42,42,0.75)');
         }
 
         recognition.onresult = async function(event) {
@@ -973,8 +973,8 @@
         // ==========================================
         (function bootSequence() {
             const lines = [
-                "INITIALIZING CORE MATRIX...",
-                "CALIBRATING NEURAL SHELL...",
+                "INITIALIZING CRIMSON CORE MATRIX...",
+                "CALIBRATING QUANTUM NEURAL SHELL...",
                 "UPLINK ESTABLISHED.",
                 "Tap the core, or say 'FRIDAY', to wake me."
             ];
