@@ -868,6 +868,40 @@
             }
         };
 
+        // Check health & connectivity on page load
+        async function checkHealthAndConnectivity() {
+            try {
+                const res = await fetch('/health');
+                if (!res.ok) throw new Error('Backend unavailable');
+                const data = await res.json();
+                if (!data.gemini_configured) {
+                    addMessage('system', 'System', 'Warning: Gemini API key is not configured or invalid on backend.');
+                    statusDiv.textContent = 'GEMINI AUTH FAILURE';
+                } else {
+                    statusDiv.textContent = 'SYSTEM ASLEEP';
+                }
+            } catch (e) {
+                addMessage('system', 'System', 'Error: Backend unavailable. Ensure friday_server.py is running.');
+                statusDiv.textContent = 'BACKEND UNAVAILABLE';
+            }
+        }
+        checkHealthAndConnectivity();
+
+        // Check microphone permission capability
+        async function checkMicrophonePermission() {
+            try {
+                if (navigator.permissions && navigator.permissions.query) {
+                    const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+                    if (permissionStatus.state === 'denied') {
+                        addMessage('system', 'System', 'Warning: Microphone permission is denied. Voice input will fail.');
+                    }
+                }
+            } catch (e) {
+                // Permissions API query not supported for mic in some browsers
+            }
+        }
+        checkMicrophonePermission();
+
         // Fetch available models from backend
         async function loadAvailableModels() {
             try {
@@ -906,7 +940,13 @@
 
                 const data = await response.json();
                 if (!response.ok) {
-                    throw new Error(data.detail || 'The AI service is unavailable.');
+                    let errMsg = data.detail || 'The AI service is unavailable.';
+                    if (response.status === 401) {
+                        statusDiv.textContent = 'GEMINI AUTH FAILURE';
+                    } else if (response.status === 502 || response.status === 504) {
+                        statusDiv.textContent = 'GEMINI REQUEST FAILURE';
+                    }
+                    throw new Error(errMsg);
                 }
                 addMessage('ai', 'Friday', data.response);
 
@@ -920,7 +960,9 @@
 
             } catch (error) {
                 addMessage('system', 'System', error.message || 'The backend could not process the command.');
-                statusDiv.textContent = "AI LINK UNAVAILABLE";
+                if (statusDiv.textContent === 'PROCESSING PROTOCOL...') {
+                    statusDiv.textContent = "AI LINK UNAVAILABLE";
+                }
                 systemState = "OFF";
                 waveActive = false;
             }

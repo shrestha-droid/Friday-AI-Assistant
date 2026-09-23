@@ -126,9 +126,10 @@ def shutdown_system():
 def analyze_screen():
     """Takes a silent screenshot of the Mac screen and tells Friday exactly what is visible safely."""
     try:
-        subprocess.run(["screencapture", "-x", "temp_screen.jpg"], check=True)
+        subprocess.run(["screencapture", "-x", "temp_screen.jpg"], check=True, timeout=10)
         
-        temp_client = genai.Client()
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        temp_client = genai.Client(api_key=api_key) if api_key else genai.Client()
         default_model = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
         
         with open("temp_screen.jpg", "rb") as f:
