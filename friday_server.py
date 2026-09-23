@@ -137,12 +137,15 @@ async def handle_command(request: CommandRequest):
     try:
         response = chat.send_message(user_text)
         
-        if response.function_calls:
+        while response.function_calls:
             function_responses = []
             for fn in response.function_calls:
                 print(f"[⚡ Friday Executing Tool: {fn.name}...]")
                 if fn.name in tool_execution_map:
-                    result = tool_execution_map[fn.name](**fn.args) if fn.args else tool_execution_map[fn.name]()
+                    try:
+                        result = tool_execution_map[fn.name](**fn.args) if fn.args else tool_execution_map[fn.name]()
+                    except Exception as tool_err:
+                        result = f"Error executing tool {fn.name}: {str(tool_err)}"
                 else:
                     result = f"Error: Tool {fn.name} is not armed."
                     
@@ -154,12 +157,11 @@ async def handle_command(request: CommandRequest):
                     )
                 )
                 
-            final_response = chat.send_message(function_responses)
-            print(f"[Friday AI]: {final_response.text}")
-            return {"response": final_response.text}
+            response = chat.send_message(function_responses)
             
-        print(f"[Friday AI]: {response.text}")
-        return {"response": response.text}
+        ai_reply = response.text if response.text else "Operation completed."
+        print(f"[Friday AI]: {ai_reply}")
+        return {"response": ai_reply}
         
     except Exception as e:
         print(f"[System Error]: {str(e)}")

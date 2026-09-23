@@ -9,16 +9,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --core: #9c3848;         /* deep crimson — idle/standby */
-            --core-glow: rgba(179, 19, 46, 0.35);
-            --signal: #3fd0ff;       /* electric blue — thinking/processing */
-            --signal-glow: rgba(63, 208, 255, 0.35);
-            --bg-0: #03060a;
-            --bg-1: #060c14;
-            --glass: rgba(8, 18, 26, 0.62);
-            --hair: rgba(88, 246, 232, 0.18);
-            --ink: #eaf6f5;
-            --ink-dim: rgba(234, 246, 245, 0.45);
+            --core: #ff2a5f;         /* vibrant cyber-crimson — idle/standby */
+            --core-glow: rgba(255, 42, 95, 0.5);
+            --signal: #00f0ff;       /* hyper-cyan — thinking/processing */
+            --signal-glow: rgba(0, 240, 255, 0.5);
+            --bg-0: #010408;
+            --bg-1: #030812;
+            --glass: rgba(4, 12, 20, 0.75);
+            --hair: rgba(0, 240, 255, 0.25);
+            --ink: #f0ffff;
+            --ink-dim: rgba(240, 255, 255, 0.55);
         }
 
         * { box-sizing: border-box; }
@@ -280,9 +280,9 @@
         }
         .msg.you .who { color: var(--ink-dim); }
         .msg.ai .who { color: var(--core); text-shadow: 0 0 8px var(--core-glow); }
-        .msg.you .body { color: var(--ink); opacity: 0.85; }
-        .msg.ai .body { color: var(--ink); }
-        .msg.system .who { color: var(--signal); }
+        .msg.you .body { color: var(--ink); opacity: 0.9; }
+        .msg.ai .body { color: var(--ink); text-shadow: 0 0 10px rgba(255,255,255,0.1); }
+        .msg.system .who { color: var(--signal); text-shadow: 0 0 8px var(--signal-glow); }
         .msg.system .body { color: var(--ink-dim); font-style: italic; }
 
         /* ---------- waveform ---------- */
@@ -478,10 +478,10 @@
         // Central dense node
         const coreGeo = new THREE.IcosahedronGeometry(0.72, 1);
         const coreMat = new THREE.MeshBasicMaterial({
-            color: 0xb3132e,
+            color: 0xff2a5f,
             wireframe: true,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.95,
             blending: THREE.AdditiveBlending
         });
         const innerMind = new THREE.Mesh(coreGeo, coreMat);
@@ -490,10 +490,10 @@
         // Organic shifting neural shell
         const shellGeo = new THREE.IcosahedronGeometry(1.35, 3);
         const shellMat = new THREE.MeshBasicMaterial({
-            color: 0xb3132e,
+            color: 0xff2a5f,
             wireframe: true,
             transparent: true,
-            opacity: 0.22,
+            opacity: 0.28,
             blending: THREE.AdditiveBlending
         });
         const neuralShell = new THREE.Mesh(shellGeo, shellMat);
@@ -535,8 +535,8 @@
             return { group, nodes, radius };
         }
 
-        const ringA = buildRing(2.05, Math.PI / 2.6, 0xb3132e, 10);
-        const ringB = buildRing(2.55, Math.PI / 1.7, 0x3fd0ff, 6);
+        const ringA = buildRing(2.05, Math.PI / 2.6, 0xff2a5f, 10);
+        const ringB = buildRing(2.55, Math.PI / 1.7, 0x00f0ff, 6);
 
         // Expanding activation pulses (spawned on tap/click)
         const activePulses = [];
@@ -790,7 +790,7 @@
         function toggleListening() {
             const wakingUp = systemState === "OFF";
             playChirp(wakingUp);
-            spawnPulse(wakingUp ? 0xb3132e : 0x3fd0ff);
+            spawnPulse(wakingUp ? 0xff2a5f : 0x00f0ff);
 
             if (wakingUp) {
                 systemState = "STANDBY";
@@ -809,18 +809,18 @@
         }
 
         function setVisualTheme(mode) {
-            // mode: "core" (cyan, idle/standby) or "signal" (amber, processing)
+            // mode: "core" (crimson, idle/standby) or "signal" (cyan, processing)
             const isSignal = mode === "signal";
             targetScale = isSignal ? 1.22 : 1;
             activeSpeedMult = isSignal ? 4 : 1;
             waveActive = isSignal;
 
-            const hex = isSignal ? 0x3fd0ff : 0xb3132e;
+            const hex = isSignal ? 0x00f0ff : 0xff2a5f;
             coreMat.color.setHex(hex);
             shellMat.color.setHex(hex);
 
-            document.documentElement.style.setProperty('--core', isSignal ? '#3fd0ff' : '#b3132e');
-            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(63,208,255,0.35)' : 'rgba(179,19,46,0.35)');
+            document.documentElement.style.setProperty('--core', isSignal ? '#00f0ff' : '#ff2a5f');
+            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(0,240,255,0.5)' : 'rgba(255,42,95,0.5)');
         }
 
         recognition.onresult = async function(event) {
