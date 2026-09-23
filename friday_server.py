@@ -30,6 +30,7 @@ app.add_middleware(
 
 class CommandRequest(BaseModel):
     text: str
+    model: str = DEFAULT_MODEL
 
 # ==========================================
 # 2. MEMORY & SYSTEM TOOLS
@@ -129,13 +130,36 @@ async def serve_ui():
     """Serves the index.html file when you visit localhost:8000"""
     return FileResponse("index.html")
 
+@app.get("/api/models")
+async def list_models():
+    """Returns a list of accessible Gemini models based on the API key"""
+    try:
+        models = []
+        for m in client.models.list():
+            # Check if the model supports content generation
+            if hasattr(m, 'supported_generation_methods') and 'generateContent' in m.supported_generation_methods:
+                model_name = m.name.replace('models/', '')
+                models.append(model_name)
+            elif hasattr(m, 'name'):
+                model_name = m.name.replace('models/', '')
+                if 'gemini' in model_name:
+                    models.append(model_name)
+        if not models:
+            models = [DEFAULT_MODEL, "gemini-2.5-flash", "gemini-2.5-pro"]
+        return {"models": sorted(list(set(models)))}
+    except Exception as e:
+        print(f"[Model List Error]: {str(e)}")
+        return {"models": [DEFAULT_MODEL, "gemini-2.5-flash", "gemini-2.5-pro"]}
+
 @app.post("/api/command")
 async def handle_command(request: CommandRequest):
     user_text = request.text
-    print(f"\n[User Input]: {user_text}")
+    requested_model = request.model if request.model else DEFAULT_MODEL
+    print(f"\n[User Input] (Model: {requested_model}): {user_text}")
     
     try:
-        response = chat.send_message(user_text)
+        active_chat = client.chats.create(model=requested_model, config=config)
+        response = active_chat.send_message(user_text)
         
         while response.function_calls:
             function_responses = []
@@ -157,7 +181,7 @@ async def handle_command(request: CommandRequest):
                     )
                 )
                 
-            response = chat.send_message(function_responses)
+            response = active_chat.send_message(function_responses)
             
         ai_reply = response.text if response.text else "Operation completed."
         print(f"[Friday AI]: {ai_reply}")

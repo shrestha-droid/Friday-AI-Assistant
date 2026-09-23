@@ -9,14 +9,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --core: #ff2a5f;         /* vibrant cyber-crimson — idle/standby */
-            --core-glow: rgba(255, 42, 95, 0.5);
-            --signal: #00f0ff;       /* hyper-cyan — thinking/processing */
-            --signal-glow: rgba(0, 240, 255, 0.5);
-            --bg-0: #010408;
-            --bg-1: #030812;
-            --glass: rgba(4, 12, 20, 0.75);
-            --hair: rgba(0, 240, 255, 0.25);
+            --core: #00f0ff;         /* ultron/jarvis high-tech electric cyan — idle/standby */
+            --core-glow: rgba(0, 240, 255, 0.6);
+            --signal: #ffb700;       /* stark gold — thinking/processing */
+            --signal-glow: rgba(255, 183, 0, 0.6);
+            --bg-0: #02060c;
+            --bg-1: #061122;
+            --glass: rgba(4, 16, 28, 0.85);
+            --hair: rgba(0, 240, 255, 0.35);
             --ink: #f0ffff;
             --ink-dim: rgba(240, 255, 255, 0.55);
         }
@@ -413,6 +413,12 @@
             <div class="panel-value" id="voice-link-status">IDLE</div>
             <div class="bar-row" id="bar-right-2"></div>
         </div>
+        <div class="panel-block" style="margin-top: 10px; border-top: 1px solid var(--hair); padding-top: 10px;">
+            <div class="panel-label">AI Neural Model</div>
+            <select id="model-select" style="width: 100%; background: var(--bg-0); color: var(--core); border: 1px solid var(--hair); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; padding: 4px; margin-top: 4px; outline: none; cursor: pointer;">
+                <option value="gemini-2.5-flash">Loading models...</option>
+            </select>
+        </div>
     </div>
 
     <div id="canvas-container"></div>
@@ -478,7 +484,7 @@
         // Central dense node
         const coreGeo = new THREE.IcosahedronGeometry(0.72, 1);
         const coreMat = new THREE.MeshBasicMaterial({
-            color: 0xff2a5f,
+            color: 0x00f0ff,
             wireframe: true,
             transparent: true,
             opacity: 0.95,
@@ -490,7 +496,7 @@
         // Organic shifting neural shell
         const shellGeo = new THREE.IcosahedronGeometry(1.35, 3);
         const shellMat = new THREE.MeshBasicMaterial({
-            color: 0xff2a5f,
+            color: 0x00f0ff,
             wireframe: true,
             transparent: true,
             opacity: 0.28,
@@ -535,8 +541,8 @@
             return { group, nodes, radius };
         }
 
-        const ringA = buildRing(2.05, Math.PI / 2.6, 0xff2a5f, 10);
-        const ringB = buildRing(2.55, Math.PI / 1.7, 0x00f0ff, 6);
+        const ringA = buildRing(2.05, Math.PI / 2.6, 0x00f0ff, 10);
+        const ringB = buildRing(2.55, Math.PI / 1.7, 0xffb700, 6);
 
         // Expanding activation pulses (spawned on tap/click)
         const activePulses = [];
@@ -790,7 +796,7 @@
         function toggleListening() {
             const wakingUp = systemState === "OFF";
             playChirp(wakingUp);
-            spawnPulse(wakingUp ? 0xff2a5f : 0x00f0ff);
+            spawnPulse(wakingUp ? 0x00f0ff : 0xffb700);
 
             if (wakingUp) {
                 systemState = "STANDBY";
@@ -809,18 +815,18 @@
         }
 
         function setVisualTheme(mode) {
-            // mode: "core" (crimson, idle/standby) or "signal" (cyan, processing)
+            // mode: "core" (cyan, idle/standby) or "signal" (gold, processing)
             const isSignal = mode === "signal";
             targetScale = isSignal ? 1.22 : 1;
             activeSpeedMult = isSignal ? 4 : 1;
             waveActive = isSignal;
 
-            const hex = isSignal ? 0x00f0ff : 0xff2a5f;
+            const hex = isSignal ? 0xffb700 : 0x00f0ff;
             coreMat.color.setHex(hex);
             shellMat.color.setHex(hex);
 
-            document.documentElement.style.setProperty('--core', isSignal ? '#00f0ff' : '#ff2a5f');
-            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(0,240,255,0.5)' : 'rgba(255,42,95,0.5)');
+            document.documentElement.style.setProperty('--core', isSignal ? '#ffb700' : '#00f0ff');
+            document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(255,183,0,0.6)' : 'rgba(0,240,255,0.6)');
         }
 
         recognition.onresult = async function(event) {
@@ -862,17 +868,40 @@
             }
         };
 
+        // Fetch available models from backend
+        async function loadAvailableModels() {
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                const select = document.getElementById('model-select');
+                if (data.models && data.models.length > 0) {
+                    select.innerHTML = '';
+                    data.models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m;
+                        opt.textContent = m;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error("Could not fetch models", e);
+            }
+        }
+        loadAvailableModels();
+
         async function sendToBrain(userText) {
             addMessage('you', 'You', userText);
             statusDiv.textContent = "PROCESSING PROTOCOL...";
 
             setVisualTheme("signal");
 
+            const selectedModel = document.getElementById('model-select').value;
+
             try {
                 const response = await fetch('/api/command', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: userText })
+                    body: JSON.stringify({ text: userText, model: selectedModel })
                 });
 
                 const data = await response.json();
