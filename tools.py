@@ -17,7 +17,9 @@ def get_system_time():
 def list_workspace_files(directory: str):
     """Allows Friday to see what files are in a folder. Always pass '.' to check the current folder."""
     try:
-        files = os.listdir(directory)
+        if not os.path.exists(directory):
+            return f"Error reading directory: Directory '{directory}' does not exist."
+        files = sorted(os.listdir(directory))
         return f"Files in '{directory}': {', '.join(files)}"
     except Exception as e:
         return f"Error reading directory: {str(e)}"
@@ -25,7 +27,9 @@ def list_workspace_files(directory: str):
 def read_file_content(filepath: str):
     """Allows Friday to read the text inside a specific file."""
     try:
-        with open(filepath, 'r') as f:
+        if not os.path.exists(filepath):
+            return f"Error reading file: File '{filepath}' does not exist."
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         return f"Content of {filepath}:\n{content}"
     except Exception as e:
@@ -34,7 +38,8 @@ def read_file_content(filepath: str):
 def write_file_content(filepath: str, content: str):
     """Allows Friday to write or overwrite a file with new code or text."""
     try:
-        with open(filepath, 'w') as f:
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         return f"Successfully wrote new content to {filepath}."
     except Exception as e:

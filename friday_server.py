@@ -60,6 +60,7 @@ except Exception as e:
     raise RuntimeError(f"Failed to initialize Gemini client: {str(e)}")
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
+FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "3000"))
 ENABLE_HTTPS = os.getenv("ENABLE_HTTPS", "true").lower() == "true"
@@ -246,11 +247,11 @@ async def list_models():
                 if 'gemini' in model_name:
                     models.append(model_name)
         if not models:
-            models = [DEFAULT_MODEL, "gemini-2.5-flash", "gemini-2.5-pro"]
+            models = [DEFAULT_MODEL] + FALLBACK_MODELS
         return {"models": sorted(list(set(models)))}
     except Exception as e:
         logger.error(f"Model List Error: {str(e)}")
-        return {"models": [DEFAULT_MODEL, "gemini-2.5-flash", "gemini-2.5-pro"]}
+        return {"models": sorted(list(set([DEFAULT_MODEL] + FALLBACK_MODELS)))}
 
 @app.post("/api/command")
 async def handle_command(request: CommandRequest):
