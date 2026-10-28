@@ -1,5 +1,12 @@
 friday_env/
 .env
 __pycache__/
+.pytest_cache/
+.DS_Store
 friday_memory.json
-*.DS_Store
+certs/
+*.wav
+*.log
+logs/
+data/
+temp_screen.jpg
