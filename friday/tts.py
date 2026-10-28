@@ -36,7 +36,7 @@ def speak(text, voice, speed):
     import numpy as np
     with _lock:
         k = _load()
-        samples, rate = k.create(text, voice=_style(k, voice), speed=speed, lang="en-gb" if voice[0] == "b" else "en-us")
+        samples, rate = k.create(text, voice=_style(k, voice), speed=speed, lang="en-gb" if voice.startswith("b") or "+b" in voice else "en-us")
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)

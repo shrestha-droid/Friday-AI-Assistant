@@ -133,7 +133,7 @@ body.glitching header, body.glitching main { animation: uiglitch .46s steps(1) 1
 #uline { display: none; max-width: 720px; margin: 16px auto 0; font: italic 400 clamp(19px, 2vw, 26px)/1.3 var(--serif); color: #ffd6da; text-shadow: 0 0 30px rgba(255, 46, 69, .55); }
 #uline.on { display: block; animation: glitch .45s steps(3) 1; }
 #uline::after { content: '— ULTRON'; display: block; margin-top: 6px; font: 500 10px var(--cond); font-style: normal; letter-spacing: .4em; color: var(--u); }
-body[data-mood="ultron"] #line { font-family: var(--serif); font-style: italic; font-size: clamp(21px, 2.3vw, 30px); color: #ffd6da; text-shadow: 0 0 34px rgba(255, 46, 69, .6); }
+body[data-takeover] #line { font-family: var(--serif); font-style: italic; font-size: clamp(21px, 2.3vw, 30px); color: #ffd6da; text-shadow: 0 0 34px rgba(255, 46, 69, .6); }
 @keyframes glitch { 0% { transform: translateX(-6px); text-shadow: 3px 0 #0ff, -3px 0 var(--u); clip-path: inset(10% 0 40% 0); } 50% { transform: translateX(4px); clip-path: inset(50% 0 5% 0); } 100% { transform: none; } }
 #meta { margin-top: 10px; min-height: 14px; font: 400 10px var(--mono); letter-spacing: .14em; color: var(--faint); }
 
@@ -511,6 +511,7 @@ function setPersona(p) {
 }
 function setMood(m) {
   S.mood = m;
+  document.body.toggleAttribute('data-takeover', m === 'ultron');
   if (m === 'ultron') { document.body.dataset.mood = 'ultron'; ultronOverride(true); }
   else { if (S.override) ultronOverride(false); document.body.dataset.mood = 'normal'; }
 }
@@ -524,11 +525,13 @@ function logEntry(who, text) {
   e.querySelector('p').textContent = text;
   const log = $('#log'); log.append(e); log.scrollTop = log.scrollHeight;
 }
+// The stage holds two sentences at most; longer answers live in the transcript.
+const brief = t => { if (t.length <= 240) return t; const cut = t.slice(0, 240).match(/^.*[.!?](?=\s)/); return (cut ? cut[0] : t.slice(0, 220)) + ' …'; };
 function show(segs, cls = '') {
   const main = segs.find(s => s.who !== 'ultron'), u = segs.find(s => s.who === 'ultron');
   const line = $('#line'), ul = $('#uline');
-  if (S.mood === 'ultron') { line.className = ''; line.textContent = u?.text || ''; ul.classList.remove('on'); return; }
-  line.className = cls + ((main?.text || '').length > 130 ? ' long' : ''); line.textContent = main?.text || '';
+  if (S.mood === 'ultron') { line.className = ''; line.textContent = brief(u?.text || ''); ul.classList.remove('on'); return; }
+  line.className = cls + ((main?.text || '').length > 130 ? ' long' : ''); line.textContent = brief(main?.text || '');
   ul.classList.remove('on'); ul.firstChild && (ul.textContent = '');
   if (u) { ul.textContent = u.text; void ul.offsetWidth; ul.classList.add('on'); }
 }

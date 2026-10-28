@@ -168,3 +168,8 @@ def test_backup_keeps_seven():
     p = make([time.time()])
     assert p.maybe_backup().exists()
     assert p.maybe_backup() is None                         # once per day
+
+
+def test_markdown_never_reaches_the_voice():
+    segs, _ = personas.split("Two ideas: 1. **Safety**: tiers.\n- `code` here\n## Heading", "friday")
+    assert not any(ch in segs[0]["text"] for ch in "*`#")
