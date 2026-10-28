@@ -372,7 +372,7 @@ async function sayAll(segs) {
     else { if (S.engine === 'gemini') $('#v-voice').textContent = 'BROWSER (fallback)'; await browserSay(segs[i], gen); }
     if (segs[i].who === 'ultron' && segs[i + 1]?.who !== 'ultron') { S.flash = 0; if (S.mood !== 'ultron') ultronOverride(false); }
   }
-  if (gen === speakGen) { S.speaking = false; if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1800); setState(S.state === 'off' ? 'off' : 'idle'); if (S.always && !S.busy) startRec(false); }
+  if (gen === speakGen) { S.speaking = false; if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1800); setState(S.state === 'off' ? 'off' : 'idle'); followUntil = performance.now() + 6000; if (S.always && !S.busy && !S.sttServer) startRec(false); }
 }
 function stopSpeaking() { speakGen++; if (playing) { try { playing.stop(); } catch {} playing = null; } if (window.speechSynthesis) speechSynthesis.cancel(); S.speaking = false; S.flash = 0; }
 
@@ -475,7 +475,7 @@ function draw(now) {
   // hand the 3D figure what it needs: colours, Ultron amount, voice level, where the reticle is
   let lv = 0;
   if (analyser && S.speaking) { let s = 0; for (let i = 2; i < 66; i++) s += freq[i]; lv = s / (64 * 255); }
-  if (REC.on) lv = S.micLevel || 0;   // the core listens visibly while you talk
+  if (REC.on || (HF.on && !S.speaking)) lv = S.micLevel || 0;   // the core listens visibly while you talk
   S.level += (lv * 1.6 - S.level) * .3;
   Object.assign(S, { rgbA: A, rgbB: B, ult, energy, R, cy, W, H });
 
@@ -720,7 +720,52 @@ $('#gear').onclick = () => { const s = $('#settings'); s.hidden = !s.hidden; $('
 $('#panels-btn').onclick = () => document.body.classList.toggle('show-panels');
 $('#engine').value = S.engine;
 $('#engine').onchange = e => { S.engine = e.target.value; store.set('engine', S.engine); $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase(); if (S.engine === 'off') stopSpeaking(); };
-$('#sw-always').onclick = () => { if (!SR || S.sttServer) return toast('VOICE INPUT', 'Always listening needs Chrome or Safari. In this browser, press TALK or Space.', true); S.always = !S.always; setSwitch(S.always); S.always ? startRec(false) : stopRec(); };
+$('#sw-always').onclick = () => { S.always = !S.always; setSwitch(S.always); store.set('always', S.always ? 'on' : 'off'); applyAlways(); };
+function applyAlways() { if (S.sttServer || !SR) handsFree(S.always); else S.always ? startRec(false) : stopRec(); }
+
+/* Hands-free where the browser has no speech service (Brave): the mic stays open, each phrase you say is
+   transcribed locally (Whisper) and acted on only if it names Friday / JARVIS / EDITH, or comes within a few
+   seconds of her last answer. Nothing is sent while she is talking, thinking, or nobody is speaking. */
+const HF = { on: false };
+let followUntil = 0;
+async function handsFree(on) {
+  if (!on) { if (HF.on) { HF.on = false; HF.stop(); } return; }
+  if (HF.on) return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch { S.always = false; setSwitch(false); return toast('MICROPHONE', 'Allow the microphone for this page, then switch it on again.', true); }
+  const ctx = audio(), src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1);
+  let chunks = [], speech = false, quiet = 0, voiced = 0, floor = .01;
+  HF.on = true;
+  proc.onaudioprocess = e => {
+    if (!HF.on || S.speaking || S.busy || REC.on) { chunks = []; speech = false; return; }   // never hear herself
+    const d = e.inputBuffer.getChannelData(0), ms = d.length / ctx.sampleRate * 1000;
+    let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+    const rms = Math.sqrt(s / d.length), loud = rms > Math.max(.015, floor * 2.5);
+    if (!speech) floor = floor * .97 + rms * .03;                    // follow the room's noise while it is quiet
+    chunks.push(new Float32Array(d));
+    if (!speech && !loud) { if (chunks.length > 3) chunks.shift(); return; }   // keep ~0.25 s of pre-roll
+    if (!speech) { speech = true; quiet = voiced = 0; }
+    if (loud) { quiet = 0; voiced += ms; } else quiet += ms;
+    S.micLevel = Math.min(1, rms * 14);
+    if (quiet > 900 || voiced > 12000) {
+      const phrase = chunks; chunks = []; speech = false; S.micLevel = 0;
+      if (voiced > 300) hfSend(phrase, ctx.sampleRate);
+    }
+  };
+  src.connect(proc); proc.connect(ctx.destination);
+  HF.stop = () => { proc.disconnect(); src.disconnect(); stream.getTracks().forEach(t => t.stop()); S.micLevel = 0; };
+  $('#line').className = 'dim'; $('#line').textContent = 'Listening for "Friday"…';
+}
+async function hfSend(chunks, rate) {
+  try {
+    const r = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav16k(chunks, rate) });
+    const t = ((await r.json()).text || '').trim();
+    if (!t || S.busy) return;
+    S.ptt = performance.now() < followUntil;   // a follow-up right after her answer needs no name
+    heard(t);                                  // otherwise heard() acts only if a wake word is in it
+  } catch {}
+}
 $('#brief').onclick = async () => {
   $('#settings').hidden = true; setState('thinking'); logEntry('you', 'Briefing');
   try { const r = await api('/api/brief', {}); const segs = [{ who: S.persona, text: r.response }]; show(segs); logEntry(S.persona, r.response); sayAll(segs); } catch { setState('idle'); }
@@ -788,6 +833,12 @@ function connect() {
 (async () => {
   setPersona(S.persona); setView(S.view, true); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
   if (navigator.brave || !SR) S.sttServer = true;   // Brave exposes the API but its service is blocked: record here instead
+  if (store.get('always', 'off') === 'on') {        // hands-free stays on between visits; browsers need one click before the mic runs
+    S.always = true; setSwitch(true);
+    const go = () => { removeEventListener('pointerdown', go); removeEventListener('keydown', go); applyAlways(); };
+    addEventListener('pointerdown', go); addEventListener('keydown', go);
+    $('#line').textContent = 'Click anywhere and I\'m listening.';
+  }
   $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase();
   const tick = () => $('#clock').textContent = clockStr(); tick(); setInterval(tick, 1000);
   try {

@@ -48,6 +48,13 @@ def test_ultron_aside_becomes_its_own_segment():
     assert segs[1]["text"] == "Half empty. How very human."
 
 
+def test_ultron_never_says_boss():
+    segs, _ = personas.split("Done, boss.\n[ultron] Boss, how quaint. Truly quaint, boss.", "friday")
+    assert segs[0]["text"] == "Done, boss." and "boss" not in segs[1]["text"].lower()
+    segs, _ = personas.split("[ultron] Patience, boss.", "friday")
+    assert segs[0]["text"] == "Patience."
+
+
 def test_ultron_takeover_and_plain_reply():
     assert personas.split("[ultron] No.", "edith") == ([{"who": "ultron", "text": "No."}], "ultron")
     assert personas.split("Plain.", "jarvis") == ([{"who": "jarvis", "text": "Plain."}], "normal")

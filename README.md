@@ -11,6 +11,16 @@ For "Hey Siri, wake Friday" or a keyboard shortcut: in the Shortcuts app make a 
 action, *Open App → Friday*; Siri picks up its name, and its settings let you assign a key combo.
 Rebuild the app after moving this folder: `scripts/make_app.sh`.
 
+**Hands-free:** Settings → *Always listening*. In Chrome/Safari it uses their speech recognition; in Brave the page keeps
+the mic open and local Whisper transcribes each phrase (nothing leaves the Mac). Friday acts when you say her name, or
+within 6 seconds of her last answer. It stays on between visits; browsers need one click on the page before the mic runs.
+
+**Always up:** to start Friday at login and restart it if it crashes, install the login item once:
+```bash
+cp scripts/com.friday.server.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.friday.server.plist
+```
+Remove it with `launchctl bootout gui/$(id -u)/com.friday.server`. Don't run the menu-bar app at the same time.
+
 ## Run it by hand
 
 ```bash

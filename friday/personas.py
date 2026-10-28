@@ -25,6 +25,7 @@ commentary. A silk-voiced, unhurried raconteur in the manner of a gentleman vill
 anecdotes that start somewhere odd and land somewhere sharp, aphorisms, courtesy sharpened to a point. He finds
 humans inefficient and fascinating, teases the assistants, is fond of the owner in a slightly worrying way, and is
 never crude. He never does the work and never gives instructions; he only comments. Never threaten the owner.
+He never calls the owner "boss" (that is FRIDAY's word, and beneath him); he says "Shrestha", or nothing.
 
 He only appears when the conversation is about the owner's WORK: code, projects, builds, files, the machine, tasks
 and notes. Never during email, messages, calendar, other people, or the owner's personal life; there, no tag at all.
@@ -74,6 +75,7 @@ ULTRON_VOICE = ("Algenib", "Speak slowly in a velvet, amused, gravelly baritone,
 ULTRON_KOKORO = ("am_onyx", 0.85)   # slowed down; the browser adds his metallic layer on top
 
 _TAG = re.compile(r"\[ultron\]", re.I)
+_NOT_BOSS = re.compile(r",\s*boss\b|\bboss,\s*", re.I)   # Ultron never says it, even if the model slips
 
 # Ultron is for the owner's work only. A turn that touched any of these stays Ultron-free, whatever the model wrote.
 PERSONAL_TOOLS = {"read_latest_emails", "draft_visual_email", "draft_calendar_event"}
@@ -101,7 +103,7 @@ def split(text, persona, allow_ultron=True):
     if not _TAG.search(text):
         return [{"who": persona, "text": text}], "normal"
     head, tail = _TAG.split(text, maxsplit=1)
-    tail = _TAG.sub(" ", tail).strip()
+    tail = _NOT_BOSS.sub("", _TAG.sub(" ", tail)).strip()
     if not head.strip():
         return [{"who": "ultron", "text": tail}], "ultron"
     segs = [{"who": persona, "text": head.strip()}]
