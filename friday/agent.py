@@ -126,8 +126,10 @@ class Agent:
                 session.contents.append(res.content)
                 if not res.calls:
                     trim(session)
-                    text, mood = personas.split_mood(res.text)
-                    return self._result(session, turn, "ok", text or "Done.", mood)
+                    segs, mood = personas.split(res.text or "Done.", turn.persona)
+                    out = self._result(session, turn, "ok", segs[0]["text"], mood)
+                    out["segments"] = segs
+                    return out
                 calls, idx, results = res.calls, 0, []
 
             while idx < len(calls):
@@ -256,6 +258,7 @@ class Agent:
         ms = int((time.monotonic() - turn.t0) * 1000)
         log.info("turn status=%s steps=%d ms=%d model=%s", status, len(turn.steps), ms, turn.used_model)
         return {"response": text, "status": status, "mood": mood, "persona": turn.persona,
+                "segments": [{"who": "ultron" if mood == "ultron" else turn.persona, "text": text}],
                 "model": turn.used_model or turn.model, "steps": turn.steps, "ms": ms, "session_id": session.id}
 
     @staticmethod

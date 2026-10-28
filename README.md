@@ -52,10 +52,15 @@ browser (index.html) ──POST /api/command──▶ friday_server.py   routes,
 
 ## The three voices (and the fourth)
 
-FRIDAY is sharp and cheeky, JARVIS is a dry butler, EDITH is tactical. Say a name while "always listening" is on to switch.
-**Ultron** is not selectable. By default every persona stays witty. Only when exactly one viable option is left (a hard refusal,
-the single path that works) the reply starts with `[ultron]`: a silk-voiced, unhurried raconteur, and the whole UI turns crimson.
-Look closely at the orb every minute or so.
+FRIDAY is sharp, cheeky and Irish, JARVIS is a dry English butler, EDITH is tactical. Say a name while "always listening" is on to switch.
+**Ultron** is not selectable and cannot be uninstalled. In about half of all replies (`ULTRON_ASIDE_RATE`, decided in code) he cuts in
+with one witty line: a silk-voiced, unhurried raconteur. His line gets its own voice, a metallic layer, serif italics, and the reticle
+turns into crimson triangles while he talks. When exactly one option is left he takes the whole reply, for theatre.
+Watch the reticle for a heartbeat of red now and then.
+
+**Voices** are Gemini 3.8 TTS on your existing key (prebuilt voices steered by a style line in `friday/personas.py`; no real actor is
+cloned). About 4 to 5 seconds per line, cached. If it fails, the browser voice takes over. Settings has "Character voices / Browser / Silent".
+Your name is respelled for speech only (`PRONOUNCE` in `config.py`): written Shrestha, said "Shresht".
 
 ## Configuration (`.env`, all optional)
 

@@ -7,12 +7,13 @@ import secrets
 import subprocess
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import psutil
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from friday import config, db, logging_setup, memory, personas
@@ -23,7 +24,7 @@ logger = logging.getLogger("friday")
 import friday.tools  # noqa: E402,F401  (registers every tool)
 from friday.agent import Agent  # noqa: E402
 from friday.events import bus  # noqa: E402
-from friday.llm import GeminiLLM  # noqa: E402
+from friday.llm import GeminiLLM, LLMError  # noqa: E402
 from friday.proactive import Proactive  # noqa: E402
 from friday.sessions import sessions  # noqa: E402
 from friday.tools import screen  # noqa: E402
@@ -182,6 +183,31 @@ async def state():
     return {"system": read_system(), "reminders": reminders, "tasks": tasks, "memory": memory.list_facts()[-20:],
             "focus_until": float(db.meta_get("focus_until", 0)),
             "personas": {k: v["label"] for k, v in personas.PERSONAS.items()}}
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    who: str = "friday"
+
+
+_tts_cache: OrderedDict = OrderedDict()   # (who, text) -> wav; repeats like "Online." cost nothing
+
+
+@app.post("/api/tts", dependencies=[Depends(guard)])
+async def tts(req: SpeakRequest):
+    text = req.text.strip()[:config.TTS_MAX_CHARS]
+    if not text:
+        raise HTTPException(400, "Nothing to say.")
+    key = (req.who, text)
+    if key not in _tts_cache:
+        voice, style = personas.voice_for(req.who)
+        try:
+            _tts_cache[key] = await llm.speak(personas.spoken(text), voice, style)
+        except LLMError:
+            raise HTTPException(503, "Voice unavailable, using the browser voice.")
+        if len(_tts_cache) > 64:
+            _tts_cache.popitem(last=False)
+    return Response(_tts_cache[key], media_type="audio/wav")
 
 
 @app.delete("/api/memory/{fact_id}", dependencies=[Depends(guard)])

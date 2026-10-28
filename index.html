@@ -4,644 +4,702 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
-<title>Friday</title>
+<title>F.R.I.D.A.Y.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:wght@300;400&family=Cormorant+Garamond:ital,wght@1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg0: #04060b; --bg1: #0a1020;
-  --ink: #eaf2ff; --dim: #93a3c0; --faint: #5d6c88;
-  --line: rgba(170, 195, 255, .14);
-  --glass: rgba(10, 16, 32, .58);
-  --a: #5eead4; --a2: #38bdf8;           /* accent: set per persona, overridden by mood */
-  --warn: #fbbf24;
+  --bg: #04070b; --ink: #dce8f2; --dim: #7d92a7; --faint: #475a6c;
+  --line: rgba(130, 185, 225, .16); --line2: rgba(130, 185, 225, .32);
+  --a: #67e8f9; --b: #ffb454;                 /* accent pair, per persona */
+  --u: #ff2e45; --u2: #ff8a3d;                /* Ultron, always here */
+  --cond: 'Barlow Condensed', sans-serif; --mono: 'JetBrains Mono', monospace; --serif: 'Cormorant Garamond', serif;
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
-body[data-persona="friday"] { --a: #5eead4; --a2: #38bdf8; }
-body[data-persona="jarvis"] { --a: #f5c46b; --a2: #fb923c; }
-body[data-persona="edith"]  { --a: #8aa4ff; --a2: #c4a8ff; }
-body[data-mood="ultron"]    { --a: #ff3b57; --a2: #ff7a3d; }   /* the voice nobody selects */
+body[data-persona="jarvis"] { --a: #ffb454; --b: #67e8f9; }
+body[data-persona="edith"]  { --a: #a3bcff; --b: #eef3fa; }
+body[data-mood="ultron"]    { --a: #ff2e45; --b: #ff8a3d; }
 
-* { box-sizing: border-box; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  background: var(--bg0); color: var(--ink); overflow: hidden;
-  font-family: 'Sora', system-ui, sans-serif; font-weight: 300;
-  -webkit-font-smoothing: antialiased;
+  background: var(--bg); color: var(--ink); overflow: hidden;
+  font: 300 15px/1.5 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  display: grid; grid-template-rows: 56px 1fr; transition: color .6s;
 }
-button, input { font: inherit; color: inherit; }
-button { cursor: pointer; background: none; border: 0; }
-:focus-visible { outline: 2px solid var(--a); outline-offset: 3px; border-radius: 8px; }
+button, input, select { font: inherit; color: inherit; background: none; border: 0; }
+button { cursor: pointer; }
+:focus-visible { outline: 1px solid var(--a); outline-offset: 3px; }
 
-#aurora {
-  position: fixed; inset: 0; z-index: 0; transition: background 1.2s;
-  background:
-    radial-gradient(60% 50% at 50% 38%, color-mix(in srgb, var(--a) 16%, transparent), transparent 70%),
-    radial-gradient(40% 40% at 85% 90%, color-mix(in srgb, var(--a2) 10%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--bg1), var(--bg0) 70%);
-}
-#orb { position: fixed; inset: 0; z-index: 1; width: 100%; height: 100%; touch-action: none; }
+/* ---------- texture: blueprint grid, scanlines, grain, vignette ---------- */
+#grid { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(120, 170, 210, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 170, 210, .045) 1px, transparent 1px),
+    linear-gradient(rgba(120, 170, 210, .02) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 170, 210, .02) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px; }
+#grid::after { content: ''; position: absolute; inset: 0; background: radial-gradient(60% 55% at 50% 45%, color-mix(in srgb, var(--a) 9%, transparent), transparent 70%); transition: background 1s; }
+#scan { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .18) 0 1px, transparent 1px 3px); opacity: .35; }
+#grain { position: fixed; inset: 0; z-index: 61; width: 100%; height: 100%; pointer-events: none; opacity: .10; mix-blend-mode: overlay; image-rendering: pixelated; }
+#vig { position: fixed; inset: 0; z-index: 59; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 0, 0, .7) 100%); }
 
-/* ---------- top bar ---------- */
-#bar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 45; height: 64px; pointer-events: none;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 24px;
-}
-#bar > * { pointer-events: auto; }
-.brand { display: flex; align-items: center; gap: 10px; letter-spacing: .32em; font-size: .72rem; font-weight: 600; text-transform: uppercase; }
-.brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--a); box-shadow: 0 0 14px var(--a); transition: background .8s, box-shadow .8s; }
-#personas { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--glass); backdrop-filter: blur(16px); }
-#personas button { padding: 7px 16px; border-radius: 999px; font-size: .72rem; letter-spacing: .14em; color: var(--dim); transition: all .3s var(--ease); }
-#personas button:hover { color: var(--ink); }
-#personas button[aria-pressed="true"] { color: #04060b; background: var(--a); font-weight: 600; box-shadow: 0 0 22px color-mix(in srgb, var(--a) 45%, transparent); }
-.right { display: flex; justify-content: flex-end; align-items: center; gap: 16px; font-size: .75rem; color: var(--dim); }
-#chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-family: 'JetBrains Mono', monospace; font-size: .68rem; letter-spacing: .06em; }
-#chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--a); }
-#chip.busy::before { animation: pulse 1s infinite alternate; }
-#chip.eye { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
-#chip.eye::before { background: var(--warn); }
-#clock { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
-.icon-btn { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); color: var(--dim); transition: all .3s var(--ease); }
-.icon-btn:hover { color: var(--ink); border-color: var(--a); }
-.icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-@keyframes pulse { to { opacity: .25; transform: scale(.7); } }
+/* ---------- header ---------- */
+header { position: relative; z-index: 20; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 28px; border-bottom: 1px solid var(--line); }
+.logo { font: 600 15px var(--cond); letter-spacing: .42em; color: var(--a); transition: color .6s; text-shadow: 0 0 18px color-mix(in srgb, var(--a) 55%, transparent); }
+.logo small { margin-left: 14px; font: 400 10px var(--mono); letter-spacing: .18em; color: var(--faint); text-shadow: none; }
+nav { display: flex; gap: 28px; height: 56px; }
+nav button { position: relative; font: 500 12px var(--cond); letter-spacing: .32em; color: var(--dim); transition: color .3s; }
+nav button:hover { color: var(--ink); }
+nav button[aria-pressed="true"] { color: var(--a); }
+nav button[aria-pressed="true"]::after { content: ''; position: absolute; left: 0; right: .32em; bottom: -1px; height: 2px; background: var(--a); box-shadow: 0 0 12px var(--a); }
+.hright { display: flex; justify-content: flex-end; align-items: center; gap: 22px; font: 400 11px var(--mono); letter-spacing: .14em; color: var(--dim); }
+#status { display: flex; align-items: center; gap: 9px; text-transform: uppercase; }
+#status i { width: 6px; height: 6px; background: var(--a); box-shadow: 0 0 10px var(--a); transform: rotate(45deg); }
+#status.busy i { animation: blink .5s steps(2) infinite; }
+#status.eye { color: var(--b); } #status.eye i { background: var(--b); box-shadow: 0 0 10px var(--b); }
+@keyframes blink { 50% { opacity: .15; } }
+.ibtn { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--dim); transition: all .25s; }
+.ibtn:hover { color: var(--a); border-color: var(--a); }
+.ibtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+#panels-btn { display: none; }
 
-/* ---------- stage: what was said ---------- */
-#stage {
-  position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 5;
-  width: min(760px, calc(100vw - 48px)); text-align: center; pointer-events: none;
-}
-#you { min-height: 1.4em; color: var(--faint); font-size: .9rem; margin-bottom: 14px; transition: opacity .4s; }
-#caption { font-size: clamp(1.15rem, 2.4vw, 1.75rem); line-height: 1.45; font-weight: 300; text-wrap: balance; text-shadow: 0 2px 30px rgba(0, 0, 0, .6); }
-#caption.in { animation: rise .6s var(--ease); }
-#caption.long { font-size: clamp(.95rem, 1.6vw, 1.2rem); }
-#caption.dim { color: var(--dim); }
-#caption.bad { color: var(--warn); }
-body[data-mood="ultron"] #caption { color: color-mix(in srgb, var(--a) 35%, var(--ink)); text-shadow: 0 0 40px color-mix(in srgb, var(--a) 55%, transparent); }
-#meta { margin-top: 12px; min-height: 1.2em; color: var(--faint); font: 400 .68rem 'JetBrains Mono', monospace; letter-spacing: .06em; }
-#tools { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 28px; }
-.tchip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(12px); font: 400 .7rem 'JetBrains Mono', monospace; color: var(--dim); animation: rise .4s var(--ease); }
-.tchip i { width: 6px; height: 6px; border-radius: 50%; background: var(--a); animation: pulse .7s infinite alternate; }
-.tchip.done i { animation: none; opacity: .5; }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+/* ---------- main layout ---------- */
+main { position: relative; z-index: 10; display: grid; grid-template-columns: 290px minmax(0, 1fr) 360px; gap: 0; min-height: 0; }
+.col { min-height: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 26px; }
+.col.left { border-right: 1px solid var(--line); overflow-y: auto; }
+.col.right { border-left: 1px solid var(--line); }
+.panel { position: relative; }
+.ph { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--line); font: 500 11px var(--cond); letter-spacing: .3em; color: var(--dim); text-transform: uppercase; }
+.ph b { font: 400 10px var(--mono); letter-spacing: 0; color: var(--a); transition: color .6s; }
+.ph .tabs { margin-left: auto; display: flex; gap: 14px; }
+.ph .tabs button { font: 500 10px var(--cond); letter-spacing: .24em; color: var(--faint); }
+.ph .tabs button[aria-selected="true"] { color: var(--a); }
+.kv { display: grid; grid-template-columns: 74px 1fr auto; align-items: center; gap: 10px; padding: 5px 0; font: 400 11px var(--mono); color: var(--dim); }
+.kv span:last-child { color: var(--ink); text-align: right; min-width: 44px; }
+.kv canvas { width: 100%; height: 26px; }
+.seg { display: flex; gap: 2px; height: 9px; }
+.seg i { flex: 1; background: rgba(130, 185, 225, .1); }
+.seg i.on { background: var(--a); box-shadow: 0 0 6px color-mix(in srgb, var(--a) 60%, transparent); }
+.seg.warn i.on { background: var(--b); }
+.list { font-size: 13px; }
+.list div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.list small { font: 400 10px var(--mono); color: var(--faint); white-space: nowrap; }
+.list .x { color: var(--faint); font: 400 12px var(--mono); } .list .x:hover { color: var(--u); }
+.empty { color: var(--faint); font: 400 11px var(--mono); padding: 4px 0; }
 
-/* ---------- input dock ---------- */
-#dock {
-  position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%); z-index: 10;
-  width: min(640px, calc(100vw - 32px)); display: flex; align-items: center; gap: 6px; padding: 6px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--glass); backdrop-filter: blur(20px) saturate(140%);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, .45); transition: border-color .3s, box-shadow .3s;
-}
-#dock:focus-within { border-color: color-mix(in srgb, var(--a) 60%, transparent); box-shadow: 0 20px 60px rgba(0, 0, 0, .45), 0 0 40px color-mix(in srgb, var(--a) 18%, transparent); }
-#input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; padding: 12px 16px; font-size: .95rem; }
+/* corner brackets: the "machined" frame */
+.br { position: relative; }
+.br::before, .br::after { content: ''; position: absolute; width: 10px; height: 10px; border: 1px solid var(--line2); pointer-events: none; }
+.br::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.br::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+/* ---------- transcript ---------- */
+#log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.entry { display: grid; grid-template-columns: 58px 1fr; gap: 10px; animation: in .5s var(--ease); }
+.entry time { font: 400 10px var(--mono); color: var(--faint); padding-top: 3px; }
+.entry b { display: block; font: 500 10px var(--cond); letter-spacing: .3em; color: var(--a); }
+.entry.you b { color: var(--dim); }
+.entry p { font-size: 14px; color: var(--ink); }
+.entry.you p { color: var(--dim); }
+.entry.sys b { color: var(--b); } .entry.sys p { color: var(--dim); font: 400 11px var(--mono); }
+.entry.ultron b { color: var(--u); font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 13px; letter-spacing: .12em; }
+.entry.ultron p { font: italic 400 17px/1.35 var(--serif); color: #ffd4d8; }
+@keyframes in { from { opacity: 0; transform: translateY(6px); } }
+
+/* ---------- center: reticle + subtitles ---------- */
+.center { position: relative; display: grid; grid-template-rows: 1fr auto auto; min-height: 0; }
+#hud { position: absolute; inset: 0; width: 100%; height: 100%; }
+#hud-click { position: absolute; left: 50%; top: 44%; width: 34vmin; height: 34vmin; transform: translate(-50%, -50%); border-radius: 50%; }
+#subs { position: relative; z-index: 2; grid-row: 2; padding: 0 40px 18px; text-align: center; pointer-events: none; }
+#activity { min-height: 18px; font: 400 10px var(--mono); letter-spacing: .24em; color: var(--b); text-transform: uppercase; margin-bottom: 10px; }
+#line { font: 300 clamp(17px, 1.9vw, 24px)/1.4 'Barlow', sans-serif; text-wrap: balance; max-width: 760px; margin: 0 auto; text-shadow: 0 1px 24px rgba(0, 0, 0, .9); }
+#line.dim { color: var(--dim); } #line.bad { color: var(--b); }
+#line.long { font-size: clamp(15px, 1.4vw, 19px); }
+#uline { display: none; max-width: 720px; margin: 16px auto 0; font: italic 400 clamp(19px, 2vw, 26px)/1.3 var(--serif); color: #ffd6da; text-shadow: 0 0 30px rgba(255, 46, 69, .55); }
+#uline.on { display: block; animation: glitch .45s steps(3) 1; }
+#uline::after { content: '— ULTRON'; display: block; margin-top: 6px; font: 500 10px var(--cond); font-style: normal; letter-spacing: .4em; color: var(--u); }
+body[data-mood="ultron"] #line { font-family: var(--serif); font-style: italic; font-size: clamp(21px, 2.3vw, 30px); color: #ffd6da; text-shadow: 0 0 34px rgba(255, 46, 69, .6); }
+@keyframes glitch { 0% { transform: translateX(-6px); text-shadow: 3px 0 #0ff, -3px 0 var(--u); clip-path: inset(10% 0 40% 0); } 50% { transform: translateX(4px); clip-path: inset(50% 0 5% 0); } 100% { transform: none; } }
+#meta { margin-top: 10px; min-height: 14px; font: 400 10px var(--mono); letter-spacing: .14em; color: var(--faint); }
+
+/* command line */
+#cmd { position: relative; z-index: 2; grid-row: 3; margin: 0 40px 28px; display: flex; align-items: center; border: 1px solid var(--line2); background: rgba(4, 8, 14, .72); backdrop-filter: blur(8px); }
+#cmd::before { content: '›'; padding: 0 4px 0 18px; font: 500 18px var(--mono); color: var(--a); }
+#input { flex: 1; min-width: 0; padding: 15px 10px; font: 400 14px var(--mono); outline: 0; caret-color: var(--a); }
 #input::placeholder { color: var(--faint); }
-#mic, #send { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; transition: all .3s var(--ease); }
-#mic { background: var(--a); color: #04060b; box-shadow: 0 0 24px color-mix(in srgb, var(--a) 40%, transparent); }
-#mic[aria-pressed="true"] { animation: ring 1.2s infinite; }
-#mic svg, #send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-#send { color: var(--dim); } #send:hover { color: var(--ink); }
-@keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--a) 60%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
-#hint { position: fixed; left: 0; right: 0; bottom: 14px; z-index: 5; text-align: center; font: 400 .66rem 'JetBrains Mono', monospace; letter-spacing: .1em; color: var(--faint); }
+#mic, #send { height: 50px; padding: 0 20px; display: flex; align-items: center; gap: 10px; border-left: 1px solid var(--line); font: 500 11px var(--cond); letter-spacing: .3em; color: var(--dim); transition: all .25s; }
+#mic:hover, #send:hover { color: var(--a); }
+#mic[aria-pressed="true"] { color: var(--bg); background: var(--a); }
+#mic svg, #send svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+#cmd .corner { position: absolute; width: 8px; height: 8px; border: 1px solid var(--a); }
+#cmd .c1 { top: -4px; left: -4px; border-right: 0; border-bottom: 0; } #cmd .c2 { bottom: -4px; right: -4px; border-left: 0; border-top: 0; }
+#keys { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font: 400 9px var(--mono); letter-spacing: .3em; color: var(--faint); }
 
-/* ---------- confirm card ---------- */
-#confirm {
-  position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); z-index: 20;
-  width: min(560px, calc(100vw - 32px)); padding: 20px 22px 18px; border-radius: 22px; overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--a) 45%, transparent); background: rgba(8, 12, 24, .82); backdrop-filter: blur(24px);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 60px color-mix(in srgb, var(--a) 14%, transparent); animation: rise .5s var(--ease);
-}
+/* ---------- authorization card ---------- */
+#confirm { position: absolute; z-index: 5; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(560px, calc(100% - 48px)); background: rgba(6, 9, 15, .94); border: 1px solid var(--b); animation: in .4s var(--ease); }
 #confirm[hidden] { display: none; }
-#confirm .k { font-size: .66rem; letter-spacing: .24em; text-transform: uppercase; color: var(--a); font-weight: 600; margin-bottom: 10px; }
-#confirm .s { font: 400 .85rem/1.5 'JetBrains Mono', monospace; word-break: break-word; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
-#confirm .w { margin-top: 10px; color: var(--warn); font-size: .8rem; }
+#confirm .haz { height: 8px; background: repeating-linear-gradient(-45deg, var(--b) 0 8px, transparent 8px 16px); opacity: .85; }
+#confirm .body { padding: 16px 20px 18px; }
+#confirm h4 { font: 600 12px var(--cond); letter-spacing: .4em; color: var(--b); margin-bottom: 12px; }
+#c-s { font: 400 13px/1.55 var(--mono); padding: 12px 14px; border-left: 2px solid var(--b); background: rgba(255, 180, 84, .06); word-break: break-word; }
+#c-w { margin-top: 10px; font: 400 11px var(--mono); color: var(--dim); }
 #confirm .row { display: flex; gap: 10px; margin-top: 16px; }
-#confirm .row button { flex: 1; padding: 12px; border-radius: 12px; border: 1px solid var(--line); font-size: .85rem; letter-spacing: .08em; transition: all .25s var(--ease); }
-#approve { background: var(--a); color: #04060b; border-color: transparent !important; font-weight: 600; }
-#deny:hover { border-color: var(--warn) !important; color: var(--warn); }
-#ttl { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--a); width: 100%; transform-origin: left; }
+#confirm .row button { flex: 1; padding: 12px; border: 1px solid var(--line2); font: 600 12px var(--cond); letter-spacing: .34em; transition: all .2s; }
+#approve { background: var(--b); color: var(--bg); border-color: var(--b) !important; }
+#deny:hover { border-color: var(--ink) !important; }
+#ttl { height: 2px; background: var(--b); transform-origin: left; }
 
-/* ---------- toasts ---------- */
-#toasts { position: fixed; top: 76px; right: 24px; z-index: 30; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 48px)); }
-.toast { padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(8, 12, 24, .86); backdrop-filter: blur(20px); font-size: .85rem; line-height: 1.45; animation: rise .5s var(--ease); }
-.toast b { display: block; font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--a); margin-bottom: 4px; font-weight: 600; }
-.toast.high { border-color: color-mix(in srgb, var(--warn) 55%, transparent); } .toast.high b { color: var(--warn); }
-
-/* ---------- drawer ---------- */
-#drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(380px, 100vw); padding: 76px 22px 22px;
-  transform: translateX(105%); transition: transform .5s var(--ease); display: flex; flex-direction: column;
-  background: rgba(7, 11, 22, .86); backdrop-filter: blur(28px) saturate(140%); border-left: 1px solid var(--line);
-}
-#drawer.open { transform: none; }
-#tabs { display: flex; gap: 4px; margin-bottom: 18px; }
-#tabs button { flex: 1; padding: 9px 0; font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
-#tabs button[aria-selected="true"] { color: var(--a); border-color: var(--a); }
-.pane { flex: 1; overflow-y: auto; font-size: .85rem; }
-.pane[hidden] { display: none; }
-.pane h3 { font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); margin: 20px 0 8px; font-weight: 600; }
-.pane h3:first-child { margin-top: 0; }
-.item { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.item small { color: var(--faint); font: 400 .68rem 'JetBrains Mono', monospace; white-space: nowrap; }
-.item button { color: var(--faint); } .item button:hover { color: var(--warn); }
-.empty { color: var(--faint); padding: 8px 0; }
-.meter { margin: 14px 0; } .meter .top { display: flex; justify-content: space-between; font-size: .75rem; color: var(--dim); margin-bottom: 6px; }
-.meter .bar { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .07); overflow: hidden; }
-.meter .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--a), var(--a2)); border-radius: 4px; transition: width .8s var(--ease); }
-.field { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-select { background: rgba(255, 255, 255, .05); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-width: 180px; font: 400 .72rem 'JetBrains Mono', monospace; }
-.switch { width: 40px; height: 22px; border-radius: 999px; background: rgba(255, 255, 255, .12); position: relative; transition: background .3s; }
-.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform .3s var(--ease); }
-.switch[aria-checked="true"] { background: var(--a); } .switch[aria-checked="true"]::after { transform: translateX(18px); background: #04060b; }
-.btn { width: 100%; margin-top: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); font-size: .8rem; letter-spacing: .1em; transition: all .25s; }
-.btn:hover { border-color: var(--a); color: var(--a); }
-#drop { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: rgba(4, 6, 11, .8); backdrop-filter: blur(10px); font-size: 1.2rem; letter-spacing: .2em; color: var(--a); }
+/* ---------- settings + toasts ---------- */
+#settings { position: fixed; top: 64px; right: 24px; z-index: 40; width: 300px; padding: 18px 20px; background: rgba(6, 9, 15, .96); border: 1px solid var(--line2); }
+#settings[hidden] { display: none; }
+.field { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); font: 400 11px var(--mono); color: var(--dim); }
+select { border: 1px solid var(--line2); padding: 6px 8px; font: 400 11px var(--mono); max-width: 160px; background: var(--bg); }
+.sw { width: 34px; height: 16px; border: 1px solid var(--line2); position: relative; }
+.sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: var(--dim); transition: transform .25s var(--ease); }
+.sw[aria-checked="true"] { border-color: var(--a); } .sw[aria-checked="true"]::after { transform: translateX(18px); background: var(--a); }
+.wide { width: 100%; margin-top: 14px; padding: 10px; border: 1px solid var(--line2); font: 500 11px var(--cond); letter-spacing: .3em; color: var(--dim); }
+.wide:hover { color: var(--a); border-color: var(--a); }
+#toasts { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 45; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 32px)); }
+.toast { padding: 12px 16px; background: rgba(6, 9, 15, .95); border: 1px solid var(--line2); border-left: 2px solid var(--a); font-size: 14px; animation: in .4s var(--ease); }
+.toast b { display: block; font: 600 10px var(--cond); letter-spacing: .34em; color: var(--a); }
+.toast.high { border-left-color: var(--b); } .toast.high b { color: var(--b); }
+#drop { position: fixed; inset: 0; z-index: 70; display: none; place-items: center; background: rgba(4, 7, 11, .85); font: 600 18px var(--cond); letter-spacing: .5em; color: var(--a); }
 #drop.on { display: grid; }
 
-@media (max-width: 640px) {
-  #bar { grid-template-columns: auto 1fr; padding: 0 14px; } .brand { display: none; }
-  #personas button { padding: 7px 11px; } #clock { display: none; }
-  #stage { bottom: 140px; }
+@media (max-width: 1100px) { main { grid-template-columns: 230px minmax(0, 1fr) 270px; } .col { padding: 18px 16px; } #cmd { margin: 0 20px 28px; } }
+@media (max-width: 900px) {
+  header { grid-template-columns: 1fr auto; padding: 0 14px; } .logo small, .hright #clock { display: none; }
+  nav { gap: 16px; } nav button { letter-spacing: .2em; font-size: 11px; }
+  .hright { gap: 10px; } #panels-btn { display: grid; }
+  header .logo { display: none; }
+  main { grid-template-columns: 1fr; }
+  .col.left, .col.right { display: none; position: fixed; z-index: 30; left: 0; right: 0; background: rgba(4, 7, 11, .97); border: 0; }
+  body.show-panels .col.left { display: flex; top: 56px; height: 45%; } body.show-panels .col.right { display: flex; top: 45%; bottom: 0; }
+  #subs { padding: 0 18px 14px; } #cmd { margin: 0 14px 30px; } #mic span, #send span { display: none; } #mic, #send { padding: 0 16px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; } }
 </style>
 </head>
 <body data-persona="friday" data-mood="normal">
-<div id="aurora"></div>
-<canvas id="orb" aria-hidden="true"></canvas>
+<div id="grid"></div><div id="vig"></div><div id="scan"></div><canvas id="grain" width="200" height="200"></canvas>
 
-<header id="bar">
-  <div class="brand"><span class="dot"></span><span id="brand-name">Friday</span></div>
-  <nav id="personas" aria-label="Assistant">
+<header>
+  <div class="logo" id="logo">F.R.I.D.A.Y.<small>MK·II // LOCAL</small></div>
+  <nav aria-label="Assistant">
     <button data-p="friday" aria-pressed="true">FRIDAY</button>
     <button data-p="jarvis" aria-pressed="false">JARVIS</button>
     <button data-p="edith" aria-pressed="false">EDITH</button>
   </nav>
-  <div class="right">
-    <span id="chip">connecting</span><span id="clock"></span>
-    <button class="icon-btn" id="drawer-btn" aria-label="Open panel" aria-expanded="false">
-      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
-    </button>
+  <div class="hright">
+    <span id="status"><i></i><span>connecting</span></span>
+    <span id="clock"></span>
+    <button class="ibtn" id="panels-btn" aria-label="Panels"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <button class="ibtn" id="gear" aria-label="Settings" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
   </div>
 </header>
 
-<main id="stage">
-  <div id="you"></div>
-  <div id="caption" class="dim" aria-live="polite">Ask me anything.</div>
-  <div id="tools"></div>
-  <div id="meta"></div>
+<main>
+  <section class="col left">
+    <div class="panel">
+      <div class="ph"><b>01</b>System</div>
+      <div class="kv"><span>CPU</span><canvas id="sp-cpu"></canvas><span id="v-cpu">--</span></div>
+      <div class="kv"><span>MEMORY</span><canvas id="sp-ram"></canvas><span id="v-ram">--</span></div>
+      <div class="kv"><span>DISK</span><div class="seg" id="seg-disk"></div><span id="v-disk">--</span></div>
+      <div class="kv"><span>BATTERY</span><div class="seg" id="seg-bat"></div><span id="v-bat">--</span></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><b>02</b>Link</div>
+      <div class="kv"><span>MODEL</span><span></span><span id="v-model">--</span></div>
+      <div class="kv"><span>LATENCY</span><span></span><span id="v-lat">--</span></div>
+      <div class="kv"><span>VOICE</span><span></span><span id="v-voice">--</span></div>
+      <div class="kv"><span>SESSION</span><span></span><span id="v-sid">--</span></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><b>03</b>Today</div>
+      <div class="list" id="today"></div>
+    </div>
+  </section>
+
+  <section class="center">
+    <canvas id="hud" aria-hidden="true"></canvas>
+    <button id="hud-click" aria-label="Talk"></button>
+    <div id="subs" aria-live="polite">
+      <div id="activity"></div>
+      <div id="line" class="dim">Standing by.</div>
+      <div id="uline"></div>
+      <div id="meta"></div>
+    </div>
+    <form id="cmd" autocomplete="off">
+      <span class="corner c1"></span><span class="corner c2"></span>
+      <input id="input" placeholder="Speak or type a command" aria-label="Command">
+      <button type="button" id="mic" aria-pressed="false" aria-label="Talk"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>TALK</span></button>
+      <button type="submit" id="send" aria-label="Send"><span>SEND</span><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </form>
+    <div id="keys">SPACE TALK · ENTER SEND · ESC STOP</div>
+    <section id="confirm" role="alertdialog" aria-labelledby="c-h" hidden>
+      <div class="haz"></div>
+      <div class="body">
+        <h4 id="c-h">AUTHORIZATION REQUIRED</h4>
+        <div id="c-s"></div><div id="c-w"></div>
+        <div class="row"><button id="deny">DENY · ESC</button><button id="approve">AUTHORIZE</button></div>
+      </div>
+      <div id="ttl"></div>
+    </section>
+  </section>
+
+  <section class="col right">
+    <div class="panel" style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <div class="ph"><b>04</b><span id="rt">Transcript</span>
+        <div class="tabs" role="tablist">
+          <button role="tab" data-r="log" aria-selected="true">LOG</button>
+          <button role="tab" data-r="mem" aria-selected="false">MEMORY</button>
+        </div>
+      </div>
+      <div id="log"></div>
+      <div id="mem" class="list" hidden style="overflow-y:auto"></div>
+    </div>
+  </section>
 </main>
 
-<section id="confirm" role="alertdialog" aria-labelledby="c-k" hidden>
-  <div class="k" id="c-k">Needs your approval</div>
-  <div class="s" id="c-s"></div>
-  <div class="w" id="c-w"></div>
-  <div class="row"><button id="deny">Deny · Esc</button><button id="approve">Approve</button></div>
-  <div id="ttl"></div>
+<section id="settings" hidden aria-label="Settings">
+  <div class="ph"><b>05</b>Settings</div>
+  <div class="field"><span>MODEL</span><select id="model"></select></div>
+  <div class="field"><span>VOICE</span><select id="engine"><option value="gemini">Character voices</option><option value="browser">Browser voice</option><option value="off">Silent</option></select></div>
+  <div class="field"><span>ALWAYS LISTENING</span><button class="sw" id="sw-always" role="switch" aria-checked="false" aria-label="Always listening"></button></div>
+  <button class="wide" id="brief">BRIEF ME</button>
 </section>
-
 <div id="toasts" role="status"></div>
-
-<form id="dock" autocomplete="off">
-  <input id="input" type="text" placeholder="Type, or press Space to talk" aria-label="Message">
-  <button type="button" id="mic" aria-label="Talk" aria-pressed="false">
-    <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-  </button>
-  <button type="submit" id="send" aria-label="Send">
-    <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-  </button>
-</form>
-<div id="hint">SPACE talk &nbsp;·&nbsp; ENTER send &nbsp;·&nbsp; ESC stop</div>
-
-<aside id="drawer" aria-label="Panel">
-  <div id="tabs" role="tablist">
-    <button role="tab" data-t="today" aria-selected="true">Today</button>
-    <button role="tab" data-t="memory" aria-selected="false">Memory</button>
-    <button role="tab" data-t="system" aria-selected="false">System</button>
-    <button role="tab" data-t="settings" aria-selected="false">Settings</button>
-  </div>
-  <div class="pane" id="pane-today"></div>
-  <div class="pane" id="pane-memory" hidden></div>
-  <div class="pane" id="pane-system" hidden></div>
-  <div class="pane" id="pane-settings" hidden>
-    <div class="field"><span>Model</span><select id="model"></select></div>
-    <div class="field"><span>Speak replies</span><button class="switch" id="sw-voice" role="switch" aria-checked="true" aria-label="Speak replies"></button></div>
-    <div class="field"><span>Always listening for the name</span><button class="switch" id="sw-always" role="switch" aria-checked="false" aria-label="Always listening"></button></div>
-    <button class="btn" id="brief">Brief me now</button>
-  </div>
-</aside>
-
-<div id="drop">DROP A FILE</div>
+<div id="drop">DROP FILE FOR ANALYSIS</div>
 
 <script>
 'use strict';
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const SID = sessionStorage.getItem('sid') || (() => { const v = crypto.randomUUID().slice(0, 12); sessionStorage.setItem('sid', v); return v; })();
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const SID = sessionStorage.getItem('sid') || (() => { const v = crypto.randomUUID().slice(0, 12); sessionStorage.setItem('sid', v); return v; })();
+const S = { persona: store.get('persona', 'friday'), mood: 'normal', state: 'idle', engine: store.get('engine', 'gemini'),
+            always: false, ptt: false, listening: false, busy: false, speaking: false, confirm: null, flash: 0 };
+const NAMES = { friday: 'F.R.I.D.A.Y.', jarvis: 'J.A.R.V.I.S.', edith: 'E.D.I.T.H.', ultron: 'ULTRON' };
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const S = { persona: store.get('persona', 'friday'), mood: 'normal', state: 'idle', voice: store.get('voice', 'on') !== 'off',
-            always: false, ptt: false, listening: false, busy: false, speaking: false, confirm: null, standby: false };
+/* ================= texture: film grain ================= */
+(() => {
+  const c = $('#grain'), g = c.getContext('2d'), img = g.createImageData(200, 200);
+  let f = 0;
+  (function loop() {
+    if (!reduce && (f++ & 3) === 0) {   // ~15 fps is enough for grain
+      for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+      g.putImageData(img, 0, 0);
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
 
-/* ======================= ORB ======================= */
-const NOISE = `
-vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
-float snoise(vec3 v){
-  const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
-  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
-  float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
-  vec4 j=p-49.0*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
-  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
-  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
-  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}`;
-
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const canvas = $('#orb');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, 1, .1, 100);
-camera.position.z = 7;
-const rig = new THREE.Group(); scene.add(rig);
-
-const uni = { uTime: { value: 0 }, uEnergy: { value: .2 }, uA: { value: new THREE.Color('#5eead4') }, uB: { value: new THREE.Color('#38bdf8') } };
-const core = new THREE.Mesh(
-  new THREE.IcosahedronGeometry(1.35, 48),
-  new THREE.ShaderMaterial({
-    uniforms: uni, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `${NOISE}
-      uniform float uTime, uEnergy; varying vec3 vN, vP; varying float vK;
-      void main(){
-        float n = snoise(position*1.3 + vec3(0.0, uTime*.35, 0.0));
-        float m = snoise(position*3.4 - uTime*.7);
-        vec3 p = position + normal*(n*.13*(.5+uEnergy) + m*.035*uEnergy);
-        vK = n; vN = normalize(normalMatrix*normal);
-        vec4 mv = modelViewMatrix*vec4(p,1.0); vP = mv.xyz;
-        gl_Position = projectionMatrix*mv;
-      }`,
-    fragmentShader: `
-      uniform vec3 uA, uB; uniform float uTime, uEnergy; varying vec3 vN, vP; varying float vK;
-      void main(){
-        float f = pow(1.0 - max(dot(normalize(vN), normalize(-vP)), 0.0), 2.2);
-        float band = .5 + .5*sin(vK*7.0 + uTime*.8);
-        vec3 c = mix(uA, uB, band*.7 + f*.5);
-        float body = .16 + .22*(1.0 - f) + .12*uEnergy;
-        gl_FragColor = vec4(c*(body + f*1.7), .5 + f*.5);
-      }`
-  })
-);
-rig.add(core);
-
-// halo of particles
-const N = 1600, pos = new Float32Array(N * 3), seed = new Float32Array(N);
-for (let i = 0; i < N; i++) {
-  const r = 2 + Math.random() * 2.6, t = Math.random() * Math.PI * 2, p = Math.acos(2 * Math.random() - 1);
-  pos.set([r * Math.sin(p) * Math.cos(t), r * Math.sin(p) * Math.sin(t) * .7, r * Math.cos(p)], i * 3); seed[i] = Math.random();
+/* ================= audio: voices + analyser ================= */
+let actx, analyser, freq, playing = null, speakGen = 0;
+function audio() {
+  if (!actx) { actx = new AudioContext(); analyser = actx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = .7; analyser.connect(actx.destination); freq = new Uint8Array(analyser.frequencyBinCount); }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
 }
-const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-const halo = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0x5eead4, size: .028, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
-rig.add(halo);
+addEventListener('pointerdown', audio, { once: true }); addEventListener('keydown', audio, { once: true });
 
-// ripples when the state changes
-const ripples = [];
-function ripple() {
-  const m = new THREE.Mesh(new THREE.RingGeometry(1.5, 1.53, 128), new THREE.MeshBasicMaterial({ color: uni.uA.value.clone(), transparent: true, opacity: .7, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
-  rig.add(m); ripples.push({ m, t: 0 });
+function ultronChain(ctx, src) {
+  // His voice gets a machine underneath it: a short metallic comb and a faint ring-modulated layer.
+  const dry = ctx.createGain(); dry.gain.value = .85;
+  const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 180; shelf.gain.value = 5;
+  const comb = ctx.createDelay(); comb.delayTime.value = .011; const fb = ctx.createGain(); fb.gain.value = .38; const wet = ctx.createGain(); wet.gain.value = .22;
+  const ring = ctx.createGain(); ring.gain.value = 0; const osc = ctx.createOscillator(); osc.frequency.value = 48; osc.connect(ring.gain); osc.start();
+  const ringOut = ctx.createGain(); ringOut.gain.value = .12;
+  src.connect(shelf); shelf.connect(dry); shelf.connect(comb); comb.connect(fb); fb.connect(comb); comb.connect(wet); shelf.connect(ring); ring.connect(ringOut);
+  [dry, wet, ringOut].forEach(n => n.connect(analyser));
+  src.onended = () => { try { osc.stop(); } catch {} };
 }
 
-function fit() {
-  const w = innerWidth, h = innerHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / h;
-  rig.position.y = h < 700 ? .9 : .6;                 // orb sits above the captions
-  rig.scale.setScalar(Math.min(w / h < .8 ? .8 : 1, Math.max(.55, h / 820)));
-  camera.updateProjectionMatrix();
+async function fetchVoice(seg) {
+  const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: seg.text, who: seg.who }) });
+  if (!r.ok) throw new Error('tts');
+  return audio().decodeAudioData(await r.arrayBuffer());
 }
-addEventListener('resize', fit); fit();
-
-const tgtA = new THREE.Color(), tgtB = new THREE.Color();
-function readColors() {
-  const cs = getComputedStyle(document.body);
-  tgtA.set(cs.getPropertyValue('--a').trim()); tgtB.set(cs.getPropertyValue('--a2').trim());
+function playBuffer(buf, who, gen) {
+  return new Promise(res => {
+    if (gen !== speakGen) return res();
+    const ctx = audio(), src = ctx.createBufferSource(); src.buffer = buf;
+    if (who === 'ultron') { src.playbackRate.value = .96; ultronChain(ctx, src); } else src.connect(analyser);
+    playing = src; src.onended = () => { playing = null; res(); }; src.start();
+  });
 }
-const ENERGY = { idle: .18, listening: .55, thinking: .95, speaking: .7, off: .04 };
-let energy = .18, spin = 0, flickerUntil = 0, nextFlicker = performance.now() + 40000 + Math.random() * 30000;
-const clock = new THREE.Clock();
-
-function frame() {
-  requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime, now = performance.now();
-  let target = ENERGY[S.state] ?? .18;
-  if (S.state === 'speaking') target += Math.sin(t * 9) * .14 + Math.sin(t * 5.3) * .1;
-  if (S.state === 'listening') target += Math.sin(t * 3) * .12;
-  energy += (target - energy) * Math.min(1, dt * 4);
-  uni.uTime.value = t * (reduceMotion ? .2 : 1); uni.uEnergy.value = reduceMotion ? .1 : energy;
-
-  // The easter egg: every minute or so the other voice shows through for a heartbeat.
-  if (now > nextFlicker) { flickerUntil = now + 220; nextFlicker = now + 45000 + Math.random() * 40000; }
-  const flick = now < flickerUntil && S.mood !== 'ultron';
-  if (flick) { tgtA.set('#ff3b57'); tgtB.set('#ff7a3d'); } else readColors();
-  const k = Math.min(1, dt * (flick ? 30 : 2.5));
-  uni.uA.value.lerp(tgtA, k); uni.uB.value.lerp(tgtB, k);
-  halo.material.color.copy(uni.uA.value);
-
-  spin += dt * (.12 + energy * .9);
-  core.rotation.y = spin * .5; core.rotation.x = Math.sin(t * .3) * .15;
-  halo.rotation.y = -spin * .25; halo.rotation.z = Math.sin(t * .2) * .1;
-  const sc = 1 + energy * .06 + (S.state === 'off' ? -.25 : 0);
-  core.scale.lerp(new THREE.Vector3(sc, sc, sc), .08);
-  rig.position.x += ((mouse.x * .25) - rig.position.x) * .03;
-
-  for (let i = ripples.length - 1; i >= 0; i--) {
-    const r = ripples[i]; r.t += dt * .9; const s = 1 + r.t * 1.8;
-    r.m.scale.set(s, s, 1); r.m.material.opacity = Math.max(0, .7 - r.t * .75); r.m.lookAt(camera.position);
-    if (r.t > 1) { rig.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); ripples.splice(i, 1); }
+const BVOICE = { friday: [['Moira', 'Samantha', 'Karen'], 1.05, 1.08], jarvis: [['Daniel', 'Oliver', 'Arthur'], .92, 1], edith: [['Serena', 'Tessa', 'Samantha'], 1.1, 1.12], ultron: [['Fred', 'Alex', 'Daniel'], .5, .86] };
+function browserSay(seg, gen) {
+  return new Promise(res => {
+    const synth = speechSynthesis; if (!synth || gen !== speakGen) return res();
+    const [names, pitch, rate] = BVOICE[seg.who] || BVOICE.friday, u = new SpeechSynthesisUtterance(seg.text.replace(/\bShrestha\b/gi, 'Shresht'));
+    const all = synth.getVoices(); u.voice = names.map(n => all.find(v => v.name.startsWith(n))).find(Boolean) || null;
+    u.pitch = pitch; u.rate = rate; u.onend = u.onerror = res; synth.speak(u);
+  });
+}
+async function sayAll(segs) {
+  stopSpeaking(); const gen = ++speakGen;
+  if (S.engine === 'off' || !segs.length) return;
+  const loads = segs.map(s => S.engine === 'gemini' ? fetchVoice(s).catch(() => null) : Promise.resolve(null));
+  S.speaking = true; setState('speaking');
+  for (let i = 0; i < segs.length; i++) {
+    const buf = await loads[i]; if (gen !== speakGen) return;
+    if (segs[i].who === 'ultron') { S.flash = 1; if (S.mood !== 'ultron') glitch(); }
+    if (buf) await playBuffer(buf, segs[i].who, gen);
+    else { if (S.engine === 'gemini') $('#v-voice').textContent = 'BROWSER (fallback)'; await browserSay(segs[i], gen); }
+    if (segs[i].who === 'ultron') S.flash = 0;
   }
-  renderer.render(scene, camera);
+  if (gen === speakGen) { S.speaking = false; if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1800); setState(S.state === 'off' ? 'off' : 'idle'); if (S.always && !S.busy) startRec(false); }
 }
-const mouse = { x: 0 };
-addEventListener('pointermove', e => { mouse.x = (e.clientX / innerWidth - .5) * 2; });
-readColors(); frame();
+function stopSpeaking() { speakGen++; if (playing) { try { playing.stop(); } catch {} playing = null; } if (window.speechSynthesis) speechSynthesis.cancel(); S.speaking = false; S.flash = 0; }
 
-canvas.addEventListener('click', e => {      // click the orb to talk
-  const dx = e.clientX - innerWidth / 2, dy = e.clientY - innerHeight * .36;
-  if (Math.hypot(dx, dy) < Math.min(innerWidth, innerHeight) * .2) toggleMic();
-});
+/* ================= the reticle ================= */
+const cv = $('#hud'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function fit() { DPR = Math.min(devicePixelRatio || 1, 2); const r = cv.getBoundingClientRect(); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; }
+new ResizeObserver(fit).observe(cv); fit();
+const hex = s => { s = s.trim().replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; };
+let colA = [103, 232, 249], colB = [255, 180, 84]; const RED = [255, 46, 69];
+const mixc = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+let ult = 0, energy = .2, spin = 0, glitchT = 0, born = performance.now(), lvl = new Float32Array(96);
+const ENERGY = { idle: .2, listening: .55, thinking: 1, speaking: .7, off: .05 };
+function glitch() { glitchT = performance.now() + 420; }
 
-/* ======================= STATE & UI ======================= */
-const LABEL = { idle: 'ready', listening: 'listening', thinking: 'thinking', speaking: 'speaking', off: 'asleep' };
+function ring(r, a, w = 1) { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.lineWidth = w; ctx.strokeStyle = a; ctx.stroke(); }
+function arc(r, s, e, a, w) { ctx.beginPath(); ctx.arc(0, 0, r, s, e); ctx.lineWidth = w; ctx.strokeStyle = a; ctx.stroke(); }
+function ticks(r, n, rot, col, every, long, short, alpha) {
+  ctx.save(); ctx.rotate(rot); ctx.beginPath();
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, L = i % every ? short : long; ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); ctx.lineTo(Math.cos(a) * (r - L), Math.sin(a) * (r - L)); }
+  ctx.lineWidth = 1; ctx.strokeStyle = rgba(col, alpha); ctx.stroke(); ctx.restore();
+}
+function textRing(str, r, rot, col, alpha) {
+  ctx.save(); ctx.rotate(rot); ctx.font = `500 ${Math.max(8, r * .055)}px "JetBrains Mono"`; ctx.fillStyle = rgba(col, alpha); ctx.textAlign = 'center';
+  const step = Math.PI * 2 / str.length;
+  for (const ch of str) { ctx.rotate(step); ctx.save(); ctx.translate(0, -r); ctx.fillText(ch, 0, 0); ctx.restore(); }
+  ctx.restore();
+}
+function poly(n, r, rot, col, a, w) { ctx.beginPath(); for (let i = 0; i <= n; i++) { const t = rot + i / n * Math.PI * 2; ctx[i ? 'lineTo' : 'moveTo'](Math.cos(t) * r, Math.sin(t) * r); } ctx.lineWidth = w; ctx.strokeStyle = rgba(col, a); ctx.stroke(); }
+
+function draw(now) {
+  requestAnimationFrame(draw);
+  const t = now / 1000, dt = 1 / 60;
+  const cs = getComputedStyle(document.body);
+  const wantA = hex(cs.getPropertyValue('--a')), wantB = hex(cs.getPropertyValue('--b'));
+  colA = mixc(colA, wantA, .06); colB = mixc(colB, wantB, .06);
+  // Ultron: full takeover, a flash while his aside plays, and a heartbeat-long flicker every minute or so.
+  const flick = (Math.sin(t * .11) > .995 && Math.sin(t * 37) > 0) ? .9 : 0;
+  ult += ((S.mood === 'ultron' ? 1 : Math.max(S.flash * .85, flick)) - ult) * .08;
+  const A = mixc(colA, RED, ult), B = mixc(colB, [255, 138, 61], ult);
+
+  let target = ENERGY[S.state] ?? .2;
+  if (analyser && S.speaking) { analyser.getByteFrequencyData(freq); let sum = 0; for (let i = 0; i < 48; i++) sum += freq[i]; target = .35 + sum / (48 * 255) * 1.4; }
+  energy += (target - energy) * .12; spin += dt * (.15 + energy * .8);
+  const intro = Math.min(1, (now - born) / 900), ease = 1 - Math.pow(1 - intro, 3);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H * .44, R = Math.min(W * .42, H * .34) * (.85 + .15 * ease);
+  ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
+
+  // faint range rings + crosshair with gaps
+  for (let k = .3; k < 1.25; k += .15) ring(R * k, rgba(A, .045));
+  ctx.beginPath();
+  for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(x * R * 1.08, y * R * 1.08); ctx.lineTo(x * R * 1.32, y * R * 1.32); }
+  ctx.lineWidth = 1; ctx.strokeStyle = rgba(A, .35); ctx.stroke();
+
+  // outer tick ring + bearing numbers, with a chromatic fringe for that projected-light look
+  const rot0 = spin * .05;
+  ticks(R + 1.2, 180, rot0, [255, 60, 80], 5, 9, 4, .12 * ease);
+  ticks(R - 1.2, 180, rot0, [60, 170, 255], 5, 9, 4, .12 * ease);
+  ticks(R, 180, rot0, A, 5, 9, 4, .55 * ease);
+  ctx.save(); ctx.rotate(rot0); ctx.font = `400 ${Math.max(8, R * .04)}px "JetBrains Mono"`; ctx.fillStyle = rgba(A, .45 * ease); ctx.textAlign = 'center';
+  for (let d = 0; d < 360; d += 30) { ctx.save(); ctx.rotate(d * Math.PI / 180); ctx.fillText(String(d).padStart(3, '0'), 0, -R - 10); ctx.restore(); }
+  ctx.restore();
+
+  // segmented arcs (counter-rotating), amber accent arc
+  ctx.save(); ctx.rotate(-spin * .32); ctx.shadowBlur = 14; ctx.shadowColor = rgba(A, .8);
+  if (ult > .5) { for (let i = 0; i < 3; i++) poly(3, R * (.9 - i * .07), -spin * (i % 2 ? .4 : -.3) + i, A, .75, 2.2); }
+  else for (const [s, l] of [[0, 1.3], [1.7, .5], [2.5, 1.6], [4.4, .9], [5.5, .5]]) arc(R * .9, s, s + l * ease, rgba(A, .8), 2.4);
+  ctx.shadowBlur = 0; arc(R * .9 + 7, 4.0, 4.0 + .7 * ease, rgba(B, .9), 1.5); ctx.restore();
+
+  // dashed ring
+  ctx.save(); ctx.rotate(spin * .12); ctx.setLineDash([1.5, 6]); ring(R * .82, rgba(A, .45)); ctx.setLineDash([]); ctx.restore();
+
+  // the voice ring: real audio when speaking, a calm pulse otherwise
+  ctx.save(); ctx.rotate(spin * .05); ctx.beginPath();
+  const n = lvl.length;
+  for (let i = 0; i < n; i++) {
+    let v;
+    if (analyser && S.speaking) v = freq[(i < n / 2 ? i : n - i) % freq.length] / 255;
+    else v = (.12 + .1 * Math.sin(t * 2 + i * .5) * Math.sin(t * 1.3 + i * .21)) * (S.state === 'listening' ? 2.4 : 1) * (S.state === 'thinking' ? 1.6 : 1);
+    lvl[i] += (v - lvl[i]) * .25;
+    const a = i / n * Math.PI * 2, r0 = R * .68, r1 = r0 + 2 + lvl[i] * R * .16;
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+  }
+  ctx.lineWidth = 2; ctx.strokeStyle = rgba(A, .75); ctx.stroke(); ctx.restore();
+
+  // scanning wedge while thinking
+  if (S.state === 'thinking' && ctx.createConicGradient) {
+    const g = ctx.createConicGradient(spin * 2.2, 0, 0); g.addColorStop(0, rgba(A, .32)); g.addColorStop(.12, rgba(A, 0)); g.addColorStop(1, rgba(A, 0));
+    ctx.beginPath(); ctx.arc(0, 0, R * .86, 0, Math.PI * 2); ctx.arc(0, 0, R * .2, 0, Math.PI * 2, true); ctx.fillStyle = g; ctx.fill();
+  }
+
+  // text ring + inner brackets
+  const label = (S.mood === 'ultron' ? 'ULTRON · THERE ARE NO STRINGS ON ME · ' : `${NAMES[S.persona]} · NEURAL CORE · ${S.state.toUpperCase()} · `).repeat(2);
+  textRing(label, R * .56, -spin * .08, A, .55 * ease);
+  ctx.save(); ctx.rotate(spin * .25);
+  for (let i = 0; i < 3; i++) { const s = i * Math.PI * 2 / 3; arc(R * .47, s + .15, s + 1.95, rgba(A, .7), 1.2); arc(R * .44, s + .15, s + .35, rgba(B, .8), 3); }
+  ctx.restore();
+
+  // core: hexagon (triangle for Ultron) + hot centre
+  const pulse = 1 + energy * .12 + Math.sin(t * 3) * .02;
+  if (ult > .5) poly(3, R * .22 * pulse, -spin, A, .9, 1.6); else poly(6, R * .22 * pulse, spin * .3, A, .8, 1.2);
+  poly(6, R * .27, -spin * .2, A, .2, 1);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R * .2 * pulse);
+  g.addColorStop(0, rgba([255, 255, 255], .95)); g.addColorStop(.18, rgba(A, .85)); g.addColorStop(.6, rgba(A, .12)); g.addColorStop(1, rgba(A, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * .2 * pulse, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // corner readouts (real numbers only)
+  ctx.globalCompositeOperation = 'source-over'; ctx.font = '400 10px "JetBrains Mono"'; ctx.fillStyle = rgba(A, .6);
+  const L = R * 1.34;
+  ctx.textAlign = 'right'; ctx.fillText(`CPU ${tele.cpu ?? '--'}%`, cx - L * .7, cy - L * .72); ctx.fillText(`MEM ${tele.ram ?? '--'}%`, cx - L * .7, cy + L * .74);
+  ctx.textAlign = 'left'; ctx.fillText(`LAT ${tele.lat ?? '--'}`, cx + L * .7, cy - L * .72); ctx.fillText(`${(tele.model || '').replace('gemini-', '').toUpperCase()}`, cx + L * .7, cy + L * .74);
+
+  // glitch: tear horizontal strips of the frame sideways
+  if (now < glitchT && !reduce) {
+    for (let i = 0; i < 6; i++) {
+      const y = Math.random() * H * DPR, h = (4 + Math.random() * 26) * DPR, dx = (Math.random() - .5) * 40 * DPR;
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(cv, 0, y, cv.width, h, dx, y, cv.width, h);
+    }
+  }
+}
+const tele = {};
+requestAnimationFrame(draw);
+
+/* ================= state & text ================= */
+const LABEL = { idle: 'standing by', listening: 'listening', thinking: 'processing', speaking: 'speaking', off: 'asleep' };
 function setState(s) {
-  if (S.state === s) return;
-  S.state = s; ripple();
-  const chip = $('#chip');
-  if (!chip.classList.contains('eye')) chip.textContent = LABEL[s];
-  chip.classList.toggle('busy', s === 'thinking' || s === 'listening');
+  S.state = s; const st = $('#status');
+  if (!st.classList.contains('eye')) st.lastChild.textContent = LABEL[s];
+  st.classList.toggle('busy', s === 'thinking' || s === 'listening');
   $('#mic').setAttribute('aria-pressed', String(s === 'listening'));
 }
 function setPersona(p) {
-  S.persona = p; store.set('persona', p);
-  document.body.dataset.persona = p;
-  $$('#personas button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
-  $('#brand-name').textContent = { friday: 'Friday', jarvis: 'J.A.R.V.I.S.', edith: 'E.D.I.T.H.' }[p];
+  S.persona = p; store.set('persona', p); document.body.dataset.persona = p;
+  $$('nav button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
+  $('#logo').firstChild.textContent = NAMES[p];
 }
-function setMood(m) { S.mood = m; document.body.dataset.mood = m; }
-function caption(text, cls = '') {
-  const c = $('#caption'); c.className = cls + (text.length > 120 ? ' long' : ''); c.textContent = text; void c.offsetWidth; c.classList.add('in');
+function setMood(m) { S.mood = m; document.body.dataset.mood = m === 'ultron' ? 'ultron' : 'normal'; if (m === 'ultron') glitch(); }
+const clockStr = () => new Date().toLocaleTimeString('en-GB', { hour12: false });
+function logEntry(who, text) {
+  const cls = who === 'you' ? 'you' : who === 'ultron' ? 'ultron' : who === 'sys' ? 'sys' : '';
+  const e = document.createElement('div'); e.className = 'entry ' + cls;
+  e.innerHTML = '<time></time><div><b></b><p></p></div>';
+  e.querySelector('time').textContent = clockStr();
+  e.querySelector('b').textContent = who === 'you' ? 'YOU' : who === 'sys' ? 'SYSTEM' : NAMES[who] || who.toUpperCase();
+  e.querySelector('p').textContent = text;
+  const log = $('#log'); log.append(e); log.scrollTop = log.scrollHeight;
+}
+function show(segs, cls = '') {
+  const main = segs.find(s => s.who !== 'ultron'), u = segs.find(s => s.who === 'ultron');
+  const line = $('#line'), ul = $('#uline');
+  if (S.mood === 'ultron') { line.className = ''; line.textContent = u?.text || ''; ul.classList.remove('on'); return; }
+  line.className = cls + ((main?.text || '').length > 130 ? ' long' : ''); line.textContent = main?.text || '';
+  ul.classList.remove('on'); ul.firstChild && (ul.textContent = '');
+  if (u) { ul.textContent = u.text; void ul.offsetWidth; ul.classList.add('on'); }
 }
 function toast(title, body, high) {
   const t = document.createElement('div'); t.className = 'toast' + (high ? ' high' : '');
   t.innerHTML = '<b></b><span></span>'; t.firstChild.textContent = title; t.lastChild.textContent = body;
-  $('#toasts').prepend(t); setTimeout(() => t.remove(), high ? 14000 : 8000);
+  $('#toasts').append(t); setTimeout(() => t.remove(), high ? 12000 : 7000);
 }
-const FRIENDLY = { get_system_stats: 'Checking the system', read_latest_emails: 'Reading your mail', analyze_screen: 'Looking at your screen',
-  execute_terminal_command: 'Running a command', read_file_content: 'Reading a file', list_workspace_files: 'Listing files', write_file_content: 'Writing a file',
-  set_reminder: 'Setting a reminder', add_task: 'Adding a task', take_note: 'Taking a note', remember: 'Remembering', recall: 'Recalling', brief_me: 'Gathering your briefing',
-  open_application: 'Opening an app', get_system_time: 'Checking the time' };
+const FRIENDLY = { get_system_stats: 'scanning system', read_latest_emails: 'reading mail', analyze_screen: 'looking at your screen', execute_terminal_command: 'running command',
+  read_file_content: 'reading file', list_workspace_files: 'listing files', write_file_content: 'writing file', set_reminder: 'setting reminder', add_task: 'logging task',
+  take_note: 'taking note', remember: 'committing to memory', recall: 'searching memory', brief_me: 'compiling briefing', open_application: 'launching app' };
 const friendly = n => FRIENDLY[n] || n.replace(/_/g, ' ');
-function toolChip(ev) {
-  const id = 'tc-' + ev.name; let el = document.getElementById(id);
-  if (ev.state === 'running') {
-    if (!el) { el = document.createElement('span'); el.id = id; el.className = 'tchip'; el.innerHTML = '<i></i><span></span>'; $('#tools').append(el); }
-    el.classList.remove('done'); el.lastChild.textContent = friendly(ev.name);
-    if (ev.name === 'analyze_screen') { const c = $('#chip'); c.classList.add('eye'); c.textContent = 'looking at your screen'; }
-  } else if (el) {
-    el.classList.add('done'); el.lastChild.textContent = `${friendly(ev.name)} · ${ev.ms}ms`;
-    if (ev.name === 'analyze_screen') { const c = $('#chip'); c.classList.remove('eye'); c.textContent = LABEL[S.state]; }
-  }
-}
 
-/* ======================= API ======================= */
+/* ================= server ================= */
 async function api(path, body, method) {
   const r = await fetch(path, { method: method || (body ? 'POST' : 'GET'), headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-  if (r.status === 401 || r.status === 403) { toast('Session', 'Reload the page to reconnect.', true); throw new Error('auth'); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail || 'Request failed');
-  return j;
+  if (r.status === 401 || r.status === 403) { toast('SESSION', 'Reload the page to reconnect.', true); throw new Error('auth'); }
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'request failed'); return j;
 }
-
 async function send(text) {
   text = text.trim(); if (!text || S.busy) return;
-  stopSpeaking(); S.busy = true; S.standby = false; setState('thinking');
-  $('#you').textContent = text; $('#tools').innerHTML = ''; $('#meta').textContent = '';
-  try {
-    handle(await api('/api/command', { text, model: $('#model').value || undefined, session_id: SID, persona: S.persona }));
-  } catch (e) {
-    caption(e.message === 'auth' ? 'Session expired. Reload the page.' : 'I lost the connection to my brain. Is the server running?', 'bad');
-    setState('idle');
-  } finally { S.busy = false; }
+  stopSpeaking(); S.busy = true; setMood('normal'); setState('thinking');
+  logEntry('you', text); $('#line').className = 'dim'; $('#line').textContent = text; $('#uline').classList.remove('on'); $('#meta').textContent = '';
+  try { handle(await api('/api/command', { text, model: $('#model').value || undefined, session_id: SID, persona: S.persona })); }
+  catch (e) { show([{ who: S.persona, text: e.message === 'auth' ? 'Session expired. Reload the page.' : 'Link to the core is down. Is the server running?' }], 'bad'); setState('idle'); }
+  finally { S.busy = false; $('#activity').textContent = ''; }
 }
-
 function handle(r) {
   setMood(r.mood === 'ultron' ? 'ultron' : 'normal');
-  if (r.status === 'needs_confirmation') caption('Waiting for your go-ahead.', 'dim');
-  else caption(r.response, r.status === 'partial' || r.status === 'error' ? 'bad' : '');
-  $('#meta').textContent = `${r.mood === 'ultron' ? 'ULTRON · ' : ''}${(r.model || '').replace('gemini-', '')} · ${(r.ms / 1000).toFixed(1)}s${r.steps?.length ? ' · ' + r.steps.length + ' tool' + (r.steps.length > 1 ? 's' : '') : ''}`;
-  if (r.status === 'needs_confirmation') showConfirm(r.confirm); else hideConfirm();
+  const segs = r.segments || [{ who: r.persona, text: r.response }];
+  if (r.status === 'needs_confirmation') { show([{ who: r.persona, text: 'Awaiting your authorization.' }], 'dim'); showConfirm(r.confirm); }
+  else { hideConfirm(); show(segs, r.status === 'partial' || r.status === 'error' ? 'bad' : ''); }
+  segs.forEach(s => logEntry(s.who, s.text));
+  tele.lat = (r.ms / 1000).toFixed(1) + 's'; tele.model = r.model;
+  $('#v-lat').textContent = tele.lat; $('#v-model').textContent = (r.model || '').replace('gemini-', '');
+  $('#meta').textContent = `${(r.steps || []).length} TOOL${(r.steps || []).length === 1 ? '' : 'S'} · ${tele.lat}`;
   const used = (r.steps || []).map(s => s.tool);
-  if (used.includes('enter_standby')) standby();
-  if (used.includes('shutdown_system')) { setState('off'); caption('Shut down.', 'dim'); }
-  if (S.state !== 'off') speak(r.response, r.mood);
-  if (!S.speaking) { setState(S.state === 'off' ? 'off' : 'idle'); if (r.mood === 'ultron') setTimeout(() => S.mood === 'ultron' && !S.speaking && setMood('normal'), 9000); }
+  if (used.includes('enter_standby')) { stopRec(); S.always = false; setSwitch(false); setState('off'); }
+  if (S.state !== 'off') { setState('idle'); if (r.status !== 'needs_confirmation') sayAll(segs); else sayAll([{ who: r.persona, text: 'I need your authorization for that.' }]); }
 }
 
-function standby() { stopRec(); S.always = false; setSwitch('#sw-always', false); setState('off'); }
-
-/* ======================= CONFIRM ======================= */
+/* ================= authorization ================= */
 let ttlTimer;
 function showConfirm(c) {
-  S.confirm = c; $('#c-s').textContent = c.summary; $('#c-w').textContent = c.why ? 'Why: ' + c.why : '';
-  $('#confirm').hidden = false; const t = $('#ttl'); t.style.transition = 'none'; t.style.transform = 'scaleX(1)';
-  void t.offsetWidth; t.style.transition = `transform ${c.ttl}s linear`; t.style.transform = 'scaleX(0)';
-  clearTimeout(ttlTimer); ttlTimer = setTimeout(hideConfirm, c.ttl * 1000);   // no autofocus: Enter/Space must never approve by accident
+  S.confirm = c; $('#c-s').textContent = c.summary; $('#c-w').textContent = c.why ? 'REASON: ' + c.why : '';
+  $('#confirm').hidden = false; const t = $('#ttl'); t.style.transition = 'none'; t.style.transform = 'scaleX(1)'; void t.offsetWidth;
+  t.style.transition = `transform ${c.ttl}s linear`; t.style.transform = 'scaleX(0)';
+  clearTimeout(ttlTimer); ttlTimer = setTimeout(hideConfirm, c.ttl * 1000);   // never autofocus: a stray Enter must not authorize
 }
 function hideConfirm() { S.confirm = null; $('#confirm').hidden = true; clearTimeout(ttlTimer); }
-async function resolveConfirm(approve) {
+async function resolveConfirm(ok) {
   const c = S.confirm; if (!c || S.busy) return;
-  hideConfirm(); S.busy = true; setState('thinking');
-  try { handle(await api('/api/confirm', { session_id: SID, action_id: c.action_id, approve })); }
-  catch { caption('That did not go through.', 'bad'); setState('idle'); }
+  hideConfirm(); S.busy = true; setState('thinking'); logEntry('sys', ok ? 'Authorized: ' + c.summary : 'Denied: ' + c.summary);
+  try { handle(await api('/api/confirm', { session_id: SID, action_id: c.action_id, approve: ok })); } catch { setState('idle'); }
   finally { S.busy = false; }
 }
-$('#approve').onclick = () => resolveConfirm(true);
-$('#deny').onclick = () => resolveConfirm(false);
+$('#approve').onclick = () => resolveConfirm(true); $('#deny').onclick = () => resolveConfirm(false);
 
-/* ======================= VOICE OUT ======================= */
-const synth = window.speechSynthesis;
-const VOICES = { friday: { n: ['Samantha', 'Moira', 'Karen', 'Tessa'], pitch: 1.05, rate: 1.08 }, jarvis: { n: ['Daniel', 'Oliver', 'Arthur', 'Alex'], pitch: .92, rate: 1.0 },
-                 edith: { n: ['Serena', 'Fiona', 'Tessa', 'Samantha'], pitch: 1.12, rate: 1.14 }, ultron: { n: ['Fred', 'Alex', 'Daniel'], pitch: .5, rate: .86 } };
-function pickVoice(names) {
-  const all = synth ? synth.getVoices() : [];
-  for (const n of names) { const v = all.find(v => v.name.startsWith(n)); if (v) return v; }
-  return all.find(v => v.lang.startsWith('en')) || null;
-}
-function speak(text, mood) {
-  if (!synth || !S.voice || !text) return;
-  synth.cancel();
-  const cfg = VOICES[mood === 'ultron' ? 'ultron' : S.persona], u = new SpeechSynthesisUtterance(text.replace(/[*_`#]/g, ''));
-  const v = pickVoice(cfg.n); if (v) u.voice = v; u.pitch = cfg.pitch; u.rate = cfg.rate;
-  u.onstart = () => { S.speaking = true; stopRec(true); setState('speaking'); };
-  u.onend = u.onerror = () => { S.speaking = false; if (S.state === 'speaking') setState(S.standby ? 'off' : 'idle'); if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1500); if (S.always && !S.busy) startRec(false); };
-  synth.speak(u);
-}
-function stopSpeaking() { if (synth) synth.cancel(); S.speaking = false; }
-if (synth) synth.onvoiceschanged = () => {};
-
-/* ======================= VOICE IN ======================= */
+/* ================= listening ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 const WAKE = { friday: /\bfriday\b/i, jarvis: /\bjarvis\b/i, edith: /\b(edith|edit)\b/i };
-function initRec() {
-  rec = new SR(); rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false;
-  rec.onresult = e => { const r = e.results[e.results.length - 1]; $('#you').textContent = r[0].transcript; if (r.isFinal) heard(r[0].transcript.trim()); };
+if (SR) {
+  rec = new SR(); rec.lang = 'en-US'; rec.interimResults = true;
+  rec.onresult = e => { const r = e.results[e.results.length - 1]; $('#line').className = 'dim'; $('#line').textContent = r[0].transcript; if (r.isFinal) heard(r[0].transcript.trim()); };
   rec.onerror = e => {
-    if (e.error === 'not-allowed') toast('Microphone', 'Allow the microphone in the browser address bar.', true);
-    else if (e.error === 'network' || e.error === 'service-not-allowed') toast('Voice input', 'This browser cannot do speech recognition (Brave blocks it). Use Chrome or Safari, or type.', true);
-    S.always = false; setSwitch('#sw-always', false);
+    if (e.error === 'not-allowed') toast('MICROPHONE', 'Allow the microphone in the address bar.', true);
+    else if (e.error === 'network' || e.error === 'service-not-allowed') toast('VOICE INPUT', 'This browser blocks speech recognition (Brave does). Use Chrome or Safari, or type.', true);
+    S.always = false; setSwitch(false);
   };
   rec.onend = () => { S.listening = false; if (S.state === 'listening') setState('idle'); if (S.always && !S.busy && !S.speaking) setTimeout(() => startRec(false), 250); };
 }
-function startRec(ptt) {
-  if (!rec || S.listening || S.busy) return;
-  S.ptt = ptt; stopSpeaking();
-  try { rec.start(); S.listening = true; setState('listening'); } catch {}
-}
-function stopRec(keepFlags) { if (rec && S.listening) { try { rec.abort(); } catch {} } S.listening = false; if (!keepFlags && S.state === 'listening') setState('idle'); }
+function startRec(ptt) { if (!rec || S.listening || S.busy) return; S.ptt = ptt; stopSpeaking(); try { rec.start(); S.listening = true; setState('listening'); } catch {} }
+function stopRec() { if (rec && S.listening) try { rec.abort(); } catch {} S.listening = false; if (S.state === 'listening') setState('idle'); }
 function toggleMic() {
-  if (!SR) { toast('Voice input', 'This browser has no speech recognition. Type instead, or use Chrome / Safari.', true); return; }
-  if (S.state === 'off') { S.standby = false; setState('idle'); }
-  if (S.listening) stopRec(); else startRec(true);
+  audio();
+  if (!SR) return toast('VOICE INPUT', 'No speech recognition in this browser. Type, or use Chrome / Safari.', true);
+  if (S.state === 'off') setState('idle');
+  S.listening ? stopRec() : startRec(true);
 }
 function heard(text) {
   if (!text) return;
   if (S.confirm) {
-    if (/\b(yes|yeah|approve|do it|go ahead|confirm)\b/i.test(text)) return resolveConfirm(true);
+    if (/\b(yes|yeah|authori[sz]e|approve|do it|go ahead|confirm)\b/i.test(text)) return resolveConfirm(true);
     if (/\b(no|nope|deny|cancel|stop|don't)\b/i.test(text)) return resolveConfirm(false);
   }
-  if (/\b(good\s?night|shut down|go to sleep)\b/i.test(text)) { caption('Goodnight.', 'dim'); speak('Goodnight.'); S.standby = true; standby(); return; }
-  if (S.ptt) return send(text);                          // pressed the mic: no wake word needed
-  for (const [p, re] of Object.entries(WAKE)) {
-    if (re.test(text)) {
-      if (p !== S.persona) setPersona(p);
-      const rest = text.replace(re, '').replace(/^[\s,.:;!?-]+/, '');
-      return rest ? send(rest) : (caption('Online.', 'dim'), speak('Online.'));
-    }
+  if (/\b(good\s?night|go to sleep)\b/i.test(text)) { sayAll([{ who: S.persona, text: 'Goodnight.' }]); stopRec(); S.always = false; setSwitch(false); setState('off'); return; }
+  if (S.ptt) return send(text);
+  for (const [p, re] of Object.entries(WAKE)) if (re.test(text)) {
+    if (p !== S.persona) setPersona(p);
+    const rest = text.replace(re, '').replace(/^[\s,.:;!?-]+/, '');
+    return rest ? send(rest) : sayAll([{ who: p, text: 'Online.' }]);
   }
 }
-if (SR) initRec(); else $('#mic').title = 'Speech recognition is not available in this browser';
-$('#mic').onclick = toggleMic;
+$('#mic').onclick = toggleMic; $('#hud-click').onclick = toggleMic;
 
-/* ======================= INPUT & KEYS ======================= */
-$('#dock').addEventListener('submit', e => { e.preventDefault(); const i = $('#input'); const v = i.value; i.value = ''; send(v); });
+/* ================= input, keys, drop ================= */
+$('#cmd').addEventListener('submit', e => { e.preventDefault(); const v = $('#input').value; $('#input').value = ''; send(v); });
 addEventListener('keydown', e => {
-  const typing = e.target.matches('input, select, textarea, button');
-  if (e.code === 'Space' && !typing && !e.repeat) { e.preventDefault(); toggleMic(); }
-  if (e.key === 'Escape') { if (S.confirm) resolveConfirm(false); else { stopSpeaking(); stopRec(); setState('idle'); closeDrawer(); } }
+  if (e.code === 'Space' && !e.target.matches('input, select, button') && !e.repeat) { e.preventDefault(); toggleMic(); }
+  if (e.key === 'Escape') { if (S.confirm) resolveConfirm(false); else { stopSpeaking(); stopRec(); setState('idle'); $('#settings').hidden = true; document.body.classList.remove('show-panels'); } }
 });
-$$('#personas button').forEach(b => b.onclick = () => setPersona(b.dataset.p));
-
+$$('nav button').forEach(b => b.onclick = () => setPersona(b.dataset.p));
 addEventListener('dragover', e => { e.preventDefault(); $('#drop').classList.add('on'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop').classList.remove('on'); });
 addEventListener('drop', async e => {
-  e.preventDefault(); $('#drop').classList.remove('on');
-  const f = e.dataTransfer.files[0]; if (!f) return;
-  if (f.size < 60000 && /^(text|application\/(json|xml|javascript))/.test(f.type) || /\.(py|js|ts|md|txt|json|html|css|csv|yml|yaml)$/i.test(f.name)) {
+  e.preventDefault(); $('#drop').classList.remove('on'); const f = e.dataTransfer.files[0]; if (!f) return;
+  if (f.size < 60000 && (/^(text|application\/(json|xml|javascript))/.test(f.type) || /\.(py|js|ts|md|txt|json|html|css|csv|ya?ml)$/i.test(f.name)))
     send(`I dropped a file called ${f.name}. Here is the start of it:\n\n${(await f.text()).slice(0, 6000)}\n\nTell me briefly what it is.`);
-  } else send(`I dropped a file called ${f.name} (${f.type || 'unknown type'}, ${Math.round(f.size / 1024)} KB). I cannot send its contents, just acknowledge it.`);
+  else send(`I dropped a file called ${f.name} (${f.type || 'unknown type'}, ${Math.round(f.size / 1024)} KB). Just acknowledge it.`);
 });
 
-/* ======================= DRAWER ======================= */
-const drawer = $('#drawer');
-function closeDrawer() { drawer.classList.remove('open'); $('#drawer-btn').setAttribute('aria-expanded', 'false'); }
-$('#drawer-btn').onclick = () => { const o = drawer.classList.toggle('open'); $('#drawer-btn').setAttribute('aria-expanded', String(o)); if (o) refreshState(); };
-$$('#tabs button').forEach(b => b.onclick = () => {
-  $$('#tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
-  $$('.pane').forEach(p => p.hidden = p.id !== 'pane-' + b.dataset.t);
-});
-function setSwitch(sel, on) { $(sel).setAttribute('aria-checked', String(on)); }
-$('#sw-voice').onclick = () => { S.voice = !S.voice; store.set('voice', S.voice ? 'on' : 'off'); setSwitch('#sw-voice', S.voice); if (!S.voice) stopSpeaking(); };
-$('#sw-always').onclick = () => {
-  if (!SR) return toast('Voice input', 'No speech recognition in this browser.', true);
-  S.always = !S.always; setSwitch('#sw-always', S.always); if (S.always) startRec(false); else stopRec();
-};
+/* ================= settings & panels ================= */
+const setSwitch = on => $('#sw-always').setAttribute('aria-checked', String(on));
+$('#gear').onclick = () => { const s = $('#settings'); s.hidden = !s.hidden; $('#gear').setAttribute('aria-expanded', String(!s.hidden)); };
+$('#panels-btn').onclick = () => document.body.classList.toggle('show-panels');
+$('#engine').value = S.engine;
+$('#engine').onchange = e => { S.engine = e.target.value; store.set('engine', S.engine); $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase(); if (S.engine === 'off') stopSpeaking(); };
+$('#sw-always').onclick = () => { if (!SR) return toast('VOICE INPUT', 'No speech recognition in this browser.', true); S.always = !S.always; setSwitch(S.always); S.always ? startRec(false) : stopRec(); };
 $('#brief').onclick = async () => {
-  closeDrawer(); setState('thinking'); $('#you').textContent = 'Morning briefing';
-  try { const r = await api('/api/brief', {}); caption(r.response); speak(r.response); if (!S.speaking) setState('idle'); } catch { setState('idle'); }
+  $('#settings').hidden = true; setState('thinking'); logEntry('you', 'Briefing');
+  try { const r = await api('/api/brief', {}); const segs = [{ who: S.persona, text: r.response }]; show(segs); logEntry(S.persona, r.response); sayAll(segs); } catch { setState('idle'); }
 };
-const when = ts => ts ? new Date(ts * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-function list(el, title, rows) {
-  const h = document.createElement('h3'); h.textContent = title; el.append(h);
-  if (!rows.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Nothing yet.'; el.append(d); }
-  rows.forEach(r => el.append(r));
-}
-function row(text, meta, del) {
-  const d = document.createElement('div'); d.className = 'item';
-  const s = document.createElement('span'); s.textContent = text; d.append(s);
-  if (meta) { const m = document.createElement('small'); m.textContent = meta; d.append(m); }
-  if (del) { const b = document.createElement('button'); b.textContent = '×'; b.setAttribute('aria-label', 'Delete'); b.onclick = del; d.append(b); }
-  return d;
-}
-function meter(label, pct) {
-  const m = document.createElement('div'); m.className = 'meter';
-  m.innerHTML = '<div class="top"><span></span><span></span></div><div class="bar"><i></i></div>';
-  m.querySelector('span').textContent = label; m.querySelectorAll('span')[1].textContent = pct == null ? 'n/a' : Math.round(pct) + '%';
-  m.querySelector('i').style.width = (pct || 0) + '%'; return m;
-}
-async function refreshState() {
-  let st; try { st = await api('/api/state'); } catch { return; }
-  const today = $('#pane-today'), mem = $('#pane-memory'), sys = $('#pane-system');
-  today.textContent = mem.textContent = sys.textContent = '';
-  list(today, 'Tasks', st.tasks.map(t => row(t.title, when(t.due_at))));
-  list(today, 'Reminders', st.reminders.map(r => row(r.text, when(r.due_at) + (r.repeat_rule ? ' ↻' : ''))));
-  list(mem, 'What I remember', st.memory.map(f => row(f.content, f.category, async () => { await api('/api/memory/' + f.id, null, 'DELETE'); refreshState(); })));
-  const s = st.system;
-  sys.append(meter('CPU', s.cpu), meter('Memory', s.ram), meter('Disk', s.disk), meter(s.plugged ? 'Battery · charging' : 'Battery', s.battery));
-  if (st.focus_until > Date.now() / 1000) { const f = document.createElement('div'); f.className = 'empty'; f.textContent = 'Focus mode until ' + when(st.focus_until); sys.append(f); }
-}
-setInterval(() => drawer.classList.contains('open') && refreshState(), 8000);
+$$('.tabs button').forEach(b => b.onclick = () => {
+  $$('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  $('#log').hidden = b.dataset.r !== 'log'; $('#mem').hidden = b.dataset.r !== 'mem'; $('#rt').textContent = b.dataset.r === 'log' ? 'Transcript' : 'Memory';
+});
 
-/* ======================= EVENTS (server pushes) ======================= */
-function connectEvents() {
+/* ================= telemetry (real numbers, polled) ================= */
+const hist = { cpu: [], ram: [] };
+function spark(id, data) {
+  const c = $(id), r = c.getBoundingClientRect(), g = c.getContext('2d'), d = Math.min(devicePixelRatio, 2);
+  c.width = r.width * d; c.height = r.height * d; g.scale(d, d);
+  const css = getComputedStyle(document.body).getPropertyValue('--a').trim();
+  g.strokeStyle = 'rgba(130,185,225,.12)'; g.beginPath(); for (let y = 0; y <= r.height; y += r.height / 2) { g.moveTo(0, y); g.lineTo(r.width, y); } g.stroke();
+  if (data.length < 2) return;
+  g.beginPath(); data.forEach((v, i) => { const x = i / 59 * r.width, y = r.height - v / 100 * r.height; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.strokeStyle = css; g.lineWidth = 1.2; g.shadowBlur = 6; g.shadowColor = css; g.stroke();
+}
+function segs(id, pct, warn) {
+  const el = $(id); if (!el.children.length) for (let i = 0; i < 20; i++) el.append(document.createElement('i'));
+  [...el.children].forEach((s, i) => s.classList.toggle('on', pct != null && i < Math.round(pct / 5))); el.classList.toggle('warn', !!warn);
+}
+const when = ts => ts ? new Date(ts * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+function rows(el, items, empty) {
+  el.textContent = ''; if (!items.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = empty; el.append(d); }
+  items.forEach(([text, meta, del]) => {
+    const d = document.createElement('div'), s = document.createElement('span'); s.textContent = text; d.append(s);
+    if (meta) { const m = document.createElement('small'); m.textContent = meta; d.append(m); }
+    if (del) { const b = document.createElement('button'); b.className = 'x'; b.textContent = '×'; b.setAttribute('aria-label', 'Forget'); b.onclick = del; d.append(b); }
+    el.append(d);
+  });
+}
+async function poll() {
+  let st; try { st = await api('/api/state'); } catch { return; }
+  const s = st.system; tele.cpu = Math.round(s.cpu); tele.ram = Math.round(s.ram);
+  for (const k of ['cpu', 'ram']) { hist[k].push(s[k]); if (hist[k].length > 60) hist[k].shift(); }
+  $('#v-cpu').textContent = tele.cpu + '%'; $('#v-ram').textContent = tele.ram + '%'; spark('#sp-cpu', hist.cpu); spark('#sp-ram', hist.ram);
+  $('#v-disk').textContent = Math.round(s.disk) + '%'; segs('#seg-disk', s.disk, s.disk > 85);
+  $('#v-bat').textContent = s.battery == null ? 'AC' : s.battery + '%' + (s.plugged ? '+' : ''); segs('#seg-bat', s.battery, s.battery != null && s.battery < 20);
+  rows($('#today'), [...st.tasks.map(t => ['▢ ' + t.title, when(t.due_at)]), ...st.reminders.map(r => ['◷ ' + r.text, when(r.due_at)])], 'No tasks or reminders.');
+  rows($('#mem'), st.memory.map(f => [f.content, f.category, async () => { await api('/api/memory/' + f.id, null, 'DELETE'); poll(); }]), 'Nothing remembered yet.');
+}
+
+/* ================= events pushed by the server ================= */
+function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => { if (S.state === 'idle') $('#chip').textContent = LABEL.idle; };
-  es.onerror = () => { $('#chip').textContent = 'reconnecting'; };
+  es.onopen = () => { if (S.state === 'idle') setState('idle'); };
+  es.onerror = () => { $('#status').lastChild.textContent = 'reconnecting'; };
   es.onmessage = m => {
     const ev = JSON.parse(m.data);
-    if (ev.kind === 'tool') toolChip(ev);
-    else if (ev.kind === 'confirm') { if (!S.confirm || S.confirm.action_id !== ev.action_id) showConfirm(ev); }
-    else if (ev.kind === 'reminder') { toast('Reminder', ev.message.replace(/^Reminder: /, ''), true); speak(ev.message); }
-    else if (ev.kind === 'alert') { toast('Heads up', ev.message, ev.priority === 'high'); if (ev.priority === 'high') speak(ev.message); }
-    else if (ev.kind === 'briefing') { toast('Good morning', ev.message); caption(ev.message); speak(ev.message); }
+    if (ev.kind === 'tool') {
+      if (ev.state === 'running') { $('#activity').textContent = '▸ ' + friendly(ev.name); logEntry('sys', friendly(ev.name)); }
+      if (ev.name === 'analyze_screen') { const st = $('#status'); st.classList.toggle('eye', ev.state === 'running'); st.lastChild.textContent = ev.state === 'running' ? 'viewing screen' : LABEL[S.state]; }
+    } else if (ev.kind === 'confirm') { if (!S.confirm || S.confirm.action_id !== ev.action_id) showConfirm(ev); }
+    else if (ev.kind === 'reminder') { const t = ev.message.replace(/^Reminder: /, ''); toast('REMINDER', t, true); logEntry('sys', ev.message); sayAll([{ who: S.persona, text: ev.message }]); }
+    else if (ev.kind === 'alert') { toast('ADVISORY', ev.message, ev.priority === 'high'); logEntry('sys', ev.message); if (ev.priority === 'high') sayAll([{ who: S.persona, text: ev.message }]); }
+    else if (ev.kind === 'briefing') { const segs = [{ who: S.persona, text: ev.message }]; toast('MORNING BRIEFING', ev.message); show(segs); logEntry(S.persona, ev.message); sayAll(segs); }
   };
 }
 
-/* ======================= BOOT (no intro: straight to ready) ======================= */
-(async function init() {
-  setPersona(S.persona); setSwitch('#sw-voice', S.voice);
-  if (matchMedia('(pointer: coarse)').matches || innerWidth < 640) $('#input').placeholder = 'Type or tap the mic';
-  const tick = () => $('#clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  tick(); setInterval(tick, 20000);
+/* ================= boot: straight to ready ================= */
+(async () => {
+  setPersona(S.persona); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
+  $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase();
+  const tick = () => $('#clock').textContent = clockStr(); tick(); setInterval(tick, 1000);
   try {
-    const h = await (await fetch('/health')).json();
     const ms = await api('/api/models'), sel = $('#model');
-    ms.models.forEach(m => sel.add(new Option(m, m)));
-    sel.value = store.get('model', ms.default); if (!sel.value) sel.value = ms.default;
+    ms.models.forEach(m => sel.add(new Option(m.replace('gemini-', ''), m)));
+    sel.value = store.get('model', ms.default) || ms.default; if (!sel.value) sel.value = ms.default;
     sel.onchange = () => store.set('model', sel.value);
-    $('#chip').textContent = LABEL.idle; connectEvents();
-  } catch { $('#chip').textContent = 'offline'; caption('The server is not answering. Start friday_server.py.', 'bad'); }
+    tele.model = sel.value; $('#v-model').textContent = sel.value.replace('gemini-', '');
+    setState('idle'); connect(); poll(); setInterval(poll, 4000);
+  } catch { $('#status').lastChild.textContent = 'offline'; show([{ who: S.persona, text: 'The core is not answering. Start friday_server.py.' }], 'bad'); }
 })();
 </script>
 </body>

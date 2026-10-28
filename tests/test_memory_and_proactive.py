@@ -37,9 +37,36 @@ def test_ultron_tag_parsing():
     assert personas.split_mood("Plain.") == ("Plain.", "normal")
 
 
-def test_every_persona_carries_the_ultron_undertone():
+def test_every_persona_carries_ultron():
     for name in personas.PERSONAS:
         assert "[ultron]" in personas.build_system(name)
+
+
+def test_ultron_aside_becomes_its_own_segment():
+    segs, mood = personas.split("Disk is at 48 percent, boss.\n[ultron] Half empty. How very human.", "friday")
+    assert mood == "aside" and [s["who"] for s in segs] == ["friday", "ultron"]
+    assert segs[1]["text"] == "Half empty. How very human."
+
+
+def test_ultron_takeover_and_plain_reply():
+    assert personas.split("[ultron] No.", "edith") == ([{"who": "ultron", "text": "No."}], "ultron")
+    assert personas.split("Plain.", "jarvis") == ([{"who": "jarvis", "text": "Plain."}], "normal")
+
+
+def test_aside_rule_is_decided_in_code():
+    assert personas.ASIDE_ON in personas.build_system("friday", aside=True)
+    assert personas.ASIDE_OFF in personas.build_system("friday", aside=False)
+
+
+def test_owner_name_is_respelled_for_speech_only():
+    assert personas.spoken("Good evening, Shrestha.") == "Good evening, Shresht."
+    assert personas.spoken("Shresthas") == "Shresthas"
+
+
+def test_every_character_has_a_voice():
+    for who in [*personas.PERSONAS, "ultron"]:
+        voice, style = personas.voice_for(who)
+        assert voice and style
 
 
 # ---- quiet hours ----

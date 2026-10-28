@@ -32,26 +32,36 @@ class GeminiLLM:
     def __init__(self):
         if not config.API_KEY:
             raise RuntimeError("GEMINI_API_KEY or GOOGLE_API_KEY is required (put it in .env).")
-        self.client = genai.Client(api_key=config.API_KEY)
+        # attempts=1: the SDK's own silent retries made every 503 cost seconds. Failover is ours (agent hedging).
+        self.client = genai.Client(api_key=config.API_KEY,
+                                   http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1)))
+        self.no_minimal = set()   # models that reject thinking_level=MINIMAL (learned at runtime)
 
-    def _cfg(self, system, tools):
+    def _cfg(self, model, system, tools):
+        level = "LOW" if model in self.no_minimal and config.THINKING_LEVEL == "MINIMAL" else config.THINKING_LEVEL
         kw = dict(
             system_instruction=system,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            thinking_config=types.ThinkingConfig(thinking_level=config.THINKING_LEVEL),
+            thinking_config=types.ThinkingConfig(thinking_level=level),
         )
         if tools:
             kw["tools"] = tools
         return types.GenerateContentConfig(**kw)
 
     async def generate(self, model, contents, system, tools=None):
-        try:
-            resp = await self.client.aio.models.generate_content(
-                model=model, contents=contents, config=self._cfg(system, tools))
-        except errors.APIError as e:
-            code = getattr(e, "code", 0) or 0
-            raise LLMError(f"{model}: {code} {getattr(e, 'message', e)}"[:300],
-                           retryable=code in RETRYABLE, auth=code in (401, 403)) from e
+        for attempt in (1, 2):
+            try:
+                resp = await self.client.aio.models.generate_content(
+                    model=model, contents=contents, config=self._cfg(model, system, tools))
+                break
+            except errors.APIError as e:
+                code = getattr(e, "code", 0) or 0
+                msg = str(getattr(e, "message", e))
+                if code == 400 and "thinking level" in msg.lower() and attempt == 1:
+                    self.no_minimal.add(model)   # e.g. gemini-3.8-flash: retry once with LOW
+                    continue
+                raise LLMError(f"{model}: {code} {msg}"[:300],
+                               retryable=code in RETRYABLE, auth=code in (401, 403)) from e
         if not resp.candidates or not resp.candidates[0].content:
             raise LLMError(f"{model}: empty response")
         content = resp.candidates[0].content
@@ -68,6 +78,23 @@ class GeminiLLM:
             contents=[prompt, types.Part.from_bytes(data=image_bytes, mime_type=mime)])
         return resp.text or ""
 
+    async def speak(self, text, voice, style):
+        """Text -> WAV bytes in a prebuilt Gemini voice, steered by a plain-English style line."""
+        cfg = types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))))
+        last = None
+        for model in config.TTS_MODELS:
+            try:
+                resp = await self.client.aio.models.generate_content(model=model, contents=f"{style}: {text}", config=cfg)
+                data = resp.candidates[0].content.parts[0].inline_data.data
+                return data if data[:4] == b"RIFF" else _wav(data)
+            except Exception as e:  # noqa: BLE001  any failure -> next model, then the browser voice
+                last = e
+                log.warning("tts model=%s failed: %s", model, str(e)[:160])
+        raise LLMError(f"tts failed: {last}"[:200])
+
     def list_models(self):
         names = [m.name.replace("models/", "") for m in self.client.models.list()]
         ok = []
@@ -79,6 +106,19 @@ class GeminiLLM:
                 continue  # Gemini 2.x and older do not work for this account
             ok.append(n)
         return sorted(set(ok))
+
+
+def _wav(pcm, rate=24000):
+    """Raw 16-bit mono PCM -> WAV (in case the API ever returns L16 instead of a WAV file)."""
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
 
 
 def user_text(text):
