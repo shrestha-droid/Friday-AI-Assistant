@@ -474,6 +474,7 @@ function draw(now) {
   // hand the 3D figure what it needs: colours, Ultron amount, voice level, where the reticle is
   let lv = 0;
   if (analyser && S.speaking) { let s = 0; for (let i = 2; i < 66; i++) s += freq[i]; lv = s / (64 * 255); }
+  if (REC.on) lv = S.micLevel || 0;   // the core listens visibly while you talk
   S.level += (lv * 1.6 - S.level) * .3;
   Object.assign(S, { rgbA: A, rgbB: B, ult, energy, R, cy, W, H });
 
@@ -594,7 +595,7 @@ if (SR) {
   rec.onresult = e => { const r = e.results[e.results.length - 1]; $('#line').className = 'dim'; $('#line').textContent = r[0].transcript; if (r.isFinal) heard(r[0].transcript.trim()); };
   rec.onerror = e => {
     if (e.error === 'not-allowed') toast('MICROPHONE', 'Allow the microphone in the address bar.', true);
-    else if (e.error === 'network' || e.error === 'service-not-allowed') toast('VOICE INPUT', 'This browser blocks speech recognition (Brave does). Use Chrome or Safari, or type.', true);
+    else if (e.error === 'network' || e.error === 'service-not-allowed') { S.sttServer = true; toast('VOICE INPUT', 'This browser blocks its speech service, so Friday will transcribe instead. Press TALK again.', true); }
     S.always = false; setSwitch(false);
   };
   rec.onend = () => { S.listening = false; if (S.state === 'listening') setState('idle'); if (S.always && !S.busy && !S.speaking) setTimeout(() => startRec(false), 250); };
@@ -603,9 +604,56 @@ function startRec(ptt) { if (!rec || S.listening || S.busy) return; S.ptt = ptt;
 function stopRec() { if (rec && S.listening) try { rec.abort(); } catch {} S.listening = false; if (S.state === 'listening') setState('idle'); }
 function toggleMic() {
   audio();
-  if (!SR) return toast('VOICE INPUT', 'No speech recognition in this browser. Type, or use Chrome / Safari.', true);
   if (S.state === 'off') setState('idle');
+  if (S.sttServer || !SR) return REC.on ? REC.finish() : recordOnce();
   S.listening ? stopRec() : startRec(true);
+}
+
+/* Brave (and any browser without speech recognition): record the mic here, transcribe on Friday's server.
+   Push to talk; it stops by itself after ~1 s of silence. */
+const REC = { on: false };
+function wav16k(chunks, rate) {
+  const all = new Float32Array(chunks.reduce((n, c) => n + c.length, 0)); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+  const step = rate / 16000, n = Math.floor(all.length / step), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (p, s) => [...s].forEach((ch, i) => v.setUint8(p + i, ch.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    let s = 0, a = Math.floor(i * step), b = Math.min(all.length, Math.floor((i + 1) * step)); for (let j = a; j < b; j++) s += all[j];
+    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, s / Math.max(1, b - a))) * 32767, true);   // average = cheap low-pass before downsampling
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+async function recordOnce() {
+  if (S.busy) return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch { return toast('MICROPHONE', 'Allow the microphone for this page (the icon in the address bar).', true); }
+  const ctx = audio(), src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1);
+  const chunks = [], t0 = performance.now(); let speech = false, quiet = 0, floor = .008;
+  stopSpeaking(); REC.on = true; S.listening = true; setState('listening'); $('#line').className = 'dim'; $('#line').textContent = 'Listening…';
+  proc.onaudioprocess = e => {
+    if (!REC.on) return;
+    const d = e.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
+    let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+    const rms = Math.sqrt(s / d.length), el = performance.now() - t0;
+    S.micLevel = Math.min(1, rms * 14);
+    if (el < 350) floor = Math.max(floor, rms * 2);                 // learn the room's noise first
+    if (rms > Math.max(.012, floor)) { speech = true; quiet = 0; } else quiet += d.length / ctx.sampleRate * 1000;
+    if ((speech && quiet > 1100) || el > 15000 || (!speech && el > 7000)) REC.finish();
+  };
+  src.connect(proc); proc.connect(ctx.destination);
+  REC.finish = async (discard) => {
+    if (!REC.on) return; REC.on = false; S.listening = false; S.micLevel = 0;
+    proc.disconnect(); src.disconnect(); stream.getTracks().forEach(t => t.stop());   // mic light goes off between commands
+    if (discard || !speech) { setState('idle'); $('#line').textContent = discard ? 'Standing by.' : 'I didn\'t hear anything.'; return; }
+    setState('thinking'); $('#line').textContent = 'Transcribing…';
+    try {
+      const r = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav16k(chunks, ctx.sampleRate) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.detail);
+      setState('idle'); if (j.text) { S.ptt = true; heard(j.text); } else $('#line').textContent = 'I didn\'t catch that.';
+    } catch (e) { setState('idle'); show([{ who: S.persona, text: e.message || 'Transcription failed.' }], 'bad'); }
+  };
 }
 function heard(text) {
   if (!text) return;
@@ -628,7 +676,7 @@ $('#cmd').addEventListener('submit', e => { e.preventDefault(); const v = $('#in
 addEventListener('keydown', e => {
   if (e.code === 'Space' && !e.target.matches('input, select, button') && !e.repeat) { e.preventDefault(); toggleMic(); }
   if (e.key.toLowerCase() === 'h' && !e.target.matches('input, select') && !e.metaKey && !e.ctrlKey) setView(S.view === 'house' ? 'core' : 'house');
-  if (e.key === 'Escape') { if (S.confirm) resolveConfirm(false); else { stopSpeaking(); stopRec(); setState('idle'); $('#settings').hidden = true; document.body.classList.remove('show-panels'); } }
+  if (e.key === 'Escape') { if (S.confirm) resolveConfirm(false); else { stopSpeaking(); stopRec(); if (REC.on) REC.finish(true); setState('idle'); $('#settings').hidden = true; document.body.classList.remove('show-panels'); } }
 });
 $$('nav button').forEach(b => b.onclick = () => setPersona(b.dataset.p));
 
@@ -657,7 +705,7 @@ $('#gear').onclick = () => { const s = $('#settings'); s.hidden = !s.hidden; $('
 $('#panels-btn').onclick = () => document.body.classList.toggle('show-panels');
 $('#engine').value = S.engine;
 $('#engine').onchange = e => { S.engine = e.target.value; store.set('engine', S.engine); $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase(); if (S.engine === 'off') stopSpeaking(); };
-$('#sw-always').onclick = () => { if (!SR) return toast('VOICE INPUT', 'No speech recognition in this browser.', true); S.always = !S.always; setSwitch(S.always); S.always ? startRec(false) : stopRec(); };
+$('#sw-always').onclick = () => { if (!SR || S.sttServer) return toast('VOICE INPUT', 'Always listening needs Chrome or Safari. In this browser, press TALK or Space.', true); S.always = !S.always; setSwitch(S.always); S.always ? startRec(false) : stopRec(); };
 $('#brief').onclick = async () => {
   $('#settings').hidden = true; setState('thinking'); logEntry('you', 'Briefing');
   try { const r = await api('/api/brief', {}); const segs = [{ who: S.persona, text: r.response }]; show(segs); logEntry(S.persona, r.response); sayAll(segs); } catch { setState('idle'); }
@@ -723,6 +771,7 @@ function connect() {
 /* ================= boot: straight to ready ================= */
 (async () => {
   setPersona(S.persona); setView(S.view, true); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
+  if (navigator.brave || !SR) S.sttServer = true;   // Brave exposes the API but its service is blocked: record here instead
   $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase();
   const tick = () => $('#clock').textContent = clockStr(); tick(); setInterval(tick, 1000);
   try {

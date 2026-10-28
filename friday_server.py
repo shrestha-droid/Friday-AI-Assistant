@@ -220,6 +220,18 @@ async def tts(req: SpeakRequest):
     return Response(wav, media_type="audio/wav", headers={"X-Voice-Engine": engine})
 
 
+@app.post("/api/stt", dependencies=[Depends(guard)])
+async def stt(request: Request):
+    """The page records the mic itself (works in Brave) and sends a WAV; we turn it into text."""
+    data = await request.body()
+    if not data or len(data) > config.STT_MAX_BYTES:
+        raise HTTPException(400, "Bad audio.")
+    try:
+        return {"text": await llm.transcribe(data, request.headers.get("content-type", "audio/wav")), "engine": "gemini"}
+    except LLMError:
+        raise HTTPException(503, "Transcription unavailable right now.")
+
+
 @app.delete("/api/memory/{fact_id}", dependencies=[Depends(guard)])
 async def delete_memory(fact_id: int):
     return {"deleted": memory.forget(fact_id)}

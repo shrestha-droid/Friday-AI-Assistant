@@ -41,6 +41,8 @@ KOKORO_MODEL = ROOT / "data" / "voices" / "kokoro-v1.0.int8.onnx"
 KOKORO_VOICES = ROOT / "data" / "voices" / "voices-v1.0.bin"
 TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
 TTS_MAX_CHARS = 600
+STT_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash"]   # speech-to-text for Brave
+STT_MAX_BYTES = 2_000_000   # ~60 s of 16 kHz mono WAV
 # Written -> spoken. The owner's name is pronounced "Shresht Pandey".
 PRONOUNCE = {"Shrestha": "Shresht"}
 

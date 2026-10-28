@@ -1,4 +1,5 @@
 """The only file that talks to Gemini. Swap this file to change provider."""
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
@@ -94,6 +95,23 @@ class GeminiLLM:
                 last = e
                 log.warning("tts model=%s failed: %s", model, str(e)[:160])
         raise LLMError(f"tts failed: {last}"[:200])
+
+    async def transcribe(self, data, mime="audio/wav"):
+        """Speech -> text, for browsers without speech recognition (Brave). Tries a few models, first answer wins."""
+        prompt = ("Transcribe the speech exactly, in English. Reply with only the words spoken, "
+                  "no quotes or labels. If there is no speech, reply with nothing. Names you may hear: Shrestha "
+                  "(said 'Shresht'), Friday, JARVIS, EDITH, Ultron.")
+        last = None
+        for model in config.STT_MODELS:
+            try:
+                async with asyncio.timeout(12):
+                    resp = await self.client.aio.models.generate_content(
+                        model=model, contents=[types.Part.from_bytes(data=data, mime_type=mime), prompt])
+                return (resp.text or "").strip()
+            except (errors.APIError, TimeoutError) as e:
+                last = e
+                log.warning("stt model=%s failed: %s", model, str(e)[:120])
+        raise LLMError(f"transcription failed: {last}"[:200])
 
     def list_models(self):
         names = [m.name.replace("models/", "") for m in self.client.models.list()]
