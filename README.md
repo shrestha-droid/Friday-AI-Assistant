@@ -58,8 +58,10 @@ with one witty line: a silk-voiced, unhurried raconteur. His line gets its own v
 turns into crimson triangles while he talks. When exactly one option is left he takes the whole reply, for theatre.
 Watch the reticle for a heartbeat of red now and then.
 
-**Voices** are Gemini 3.8 TTS on your existing key (prebuilt voices steered by a style line in `friday/personas.py`; no real actor is
-cloned). About 4 to 5 seconds per line, cached. If it fails, the browser voice takes over. Settings has "Character voices / Browser / Silent".
+**Voices** come from Kokoro first: free, offline, about 1 to 2 seconds per line on this Mac (model files in `data/voices/`,
+voice per character in `friday/personas.py`). If Kokoro is missing or fails, Gemini 3.8 TTS on your key takes over (more
+expressive, 4 to 5 seconds, free-tier quota runs out fast), then the browser voice. No real actor is cloned. Lines are cached.
+Settings has "Character voices / Browser / Silent", and the LINK panel shows which engine spoke.
 Your name is respelled for speech only (`PRONOUNCE` in `config.py`): written Shrestha, said "Shresht".
 
 ## Configuration (`.env`, all optional)

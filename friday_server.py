@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from pydantic import BaseModel
 
 from friday import config, db, logging_setup, memory, personas
+from friday import tts as tts_local
 
 logging_setup.setup()
 logger = logging.getLogger("friday")
@@ -200,14 +201,23 @@ async def tts(req: SpeakRequest):
         raise HTTPException(400, "Nothing to say.")
     key = (req.who, text)
     if key not in _tts_cache:
-        voice, style = personas.voice_for(req.who)
-        try:
-            _tts_cache[key] = await llm.speak(personas.spoken(text), voice, style)
-        except LLMError:
-            raise HTTPException(503, "Voice unavailable, using the browser voice.")
+        said = personas.spoken(text)
+        wav = engine = None
+        if tts_local.available():
+            try:
+                wav, engine = await asyncio.to_thread(tts_local.speak, said, *personas.kokoro_voice_for(req.who)), "kokoro"
+            except Exception:
+                logger.exception("kokoro failed, trying Gemini")
+        if wav is None:
+            try:
+                wav, engine = await llm.speak(said, *personas.voice_for(req.who)), "gemini"
+            except LLMError:
+                raise HTTPException(503, "Voice unavailable, using the browser voice.")
+        _tts_cache[key] = (wav, engine)
         if len(_tts_cache) > 64:
             _tts_cache.popitem(last=False)
-    return Response(_tts_cache[key], media_type="audio/wav")
+    wav, engine = _tts_cache[key]
+    return Response(wav, media_type="audio/wav", headers={"X-Voice-Engine": engine})
 
 
 @app.delete("/api/memory/{fact_id}", dependencies=[Depends(guard)])

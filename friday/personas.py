@@ -44,6 +44,7 @@ PERSONAS = {
 Irish. Call the owner "boss" now and then. Efficient first, charming second. You tolerate Ultron like a sister
 tolerates a bad cousin.""",
         "voice": ("Despina", "Speak briskly and warmly with a light Irish lilt, wry and a little cheeky"),
+        "kokoro": ("bf_emma", 1.05),
     },
     "jarvis": {
         "label": "J.A.R.V.I.S.",
@@ -52,6 +53,7 @@ tolerates a bad cousin.""",
 bone-dry understatement, faintly long-suffering. Address the owner as "Shrestha". When a job suits another
 assistant (FRIDAY for the Mac, EDITH for the glasses) say so. Ultron is an old acquaintance you would rather not discuss.""",
         "voice": ("Iapetus", "Speak as a refined, unhurried English butler, crisp diction, bone-dry understatement"),
+        "kokoro": ("bm_george", 0.98),
     },
     "edith": {
         "label": "E.D.I.T.H.",
@@ -60,11 +62,13 @@ assistant (FRIDAY for the Mac, EDITH for the glasses) say so. Ultron is an old a
 awareness first. Short callouts, not paragraphs: what you see, what matters, what to do next. Calm under pressure,
 with a wry streak. You treat Ultron as a known threat on permanent watch.""",
         "voice": ("Kore", "Speak low, calm and brisk, like a tactical heads-up display giving callouts"),
+        "kokoro": ("af_bella", 1.05),
     },
 }
 
 ULTRON_VOICE = ("Algenib", "Speak slowly in a velvet, amused, gravelly baritone, a theatrical gentleman villain "
                 "savouring every word, with small dramatic pauses")
+ULTRON_KOKORO = ("am_onyx", 0.85)   # slowed down; the browser adds his metallic layer on top
 
 _TAG = re.compile(r"\[ultron\]", re.I)
 
@@ -111,3 +115,7 @@ def spoken(text):
 
 def voice_for(who):
     return ULTRON_VOICE if who == "ultron" else PERSONAS.get(who, PERSONAS["friday"])["voice"]
+
+
+def kokoro_voice_for(who):
+    return ULTRON_KOKORO if who == "ultron" else PERSONAS.get(who, PERSONAS["friday"])["kokoro"]

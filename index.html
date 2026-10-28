@@ -318,6 +318,7 @@ function ultronChain(ctx, src) {
 async function fetchVoice(seg) {
   const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: seg.text, who: seg.who }) });
   if (!r.ok) throw new Error('tts');
+  $('#v-voice').textContent = { kokoro: 'KOKORO (LOCAL)', gemini: 'GEMINI TTS' }[r.headers.get('X-Voice-Engine')] || 'CHARACTER';
   return audio().decodeAudioData(await r.arrayBuffer());
 }
 function playBuffer(buf, who, gen) {

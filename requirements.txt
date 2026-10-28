@@ -8,3 +8,4 @@ rumps
 pyaudio
 pytest
 httpx
+kokoro-onnx

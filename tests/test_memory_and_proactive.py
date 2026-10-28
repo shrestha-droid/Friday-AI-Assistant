@@ -66,7 +66,8 @@ def test_owner_name_is_respelled_for_speech_only():
 def test_every_character_has_a_voice():
     for who in [*personas.PERSONAS, "ultron"]:
         voice, style = personas.voice_for(who)
-        assert voice and style
+        kvoice, speed = personas.kokoro_voice_for(who)
+        assert voice and style and kvoice and 0.5 < speed < 1.5
 
 
 # ---- quiet hours ----

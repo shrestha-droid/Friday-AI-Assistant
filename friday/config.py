@@ -36,7 +36,9 @@ THINKING_LEVEL = os.getenv("THINKING_LEVEL", "MINIMAL")  # voice assistant: spee
 STICKY_MODEL_S = 5 * 60   # after a fallback answers, try it first for this long
 ULTRON_ASIDE_RATE = float(os.getenv("ULTRON_ASIDE_RATE", "0.5"))   # share of replies where Ultron cuts in
 
-# --- voices (Gemini TTS, same key; the browser voice is only the fallback) ---
+# --- voices: Kokoro (local, free) first, then Gemini TTS, then the browser voice ---
+KOKORO_MODEL = ROOT / "data" / "voices" / "kokoro-v1.0.int8.onnx"
+KOKORO_VOICES = ROOT / "data" / "voices" / "voices-v1.0.bin"
 TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
 TTS_MAX_CHARS = 600
 # Written -> spoken. The owner's name is pronounced "Shresht Pandey".
