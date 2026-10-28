@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Starts Friday at login and restarts it if it crashes.
+     Install:   cp scripts/com.friday.server.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.friday.server.plist
+     Remove:    launchctl unload ~/Library/LaunchAgents/com.friday.server.plist && rm ~/Library/LaunchAgents/com.friday.server.plist
+     Do not run this AND the menu-bar app at the same time (they would fight over the port). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.friday.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/ShresthaPandey/jarvis/Friday_Project/friday_env/bin/python</string>
+    <string>/Users/ShresthaPandey/jarvis/Friday_Project/friday_server.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/ShresthaPandey/jarvis/Friday_Project</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/Users/ShresthaPandey/jarvis/Friday_Project/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/ShresthaPandey/jarvis/Friday_Project/logs/launchd.err.log</string>
+</dict>
+</plist>

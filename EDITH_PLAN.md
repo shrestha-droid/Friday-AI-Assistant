@@ -292,11 +292,11 @@ Rules for the layout:
 
 ## 6. Checklist
 
-- [ ] Phase 0: safety net and hygiene
-- [ ] Phase 1: own the agent loop
-- [ ] Phase 2: permissions and safety
-- [ ] Phase 3: real memory
-- [ ] Phase 4: proactive mode
-- [ ] Phase 5: daily-use skills (3 chosen)
-- [ ] Phase 6: voice and UX
-- [ ] Phase 7: operations
+- [x] Phase 0: safety net and hygiene
+- [x] Phase 1: own the agent loop (plus model hedging across Gemini 3+ models)
+- [x] Phase 2: permissions and safety
+- [x] Phase 3: real memory (FTS5; no embeddings yet)
+- [~] Phase 4: proactive mode (reminders, watchers, briefing done; calendar reading not yet)
+- [~] Phase 5: daily-use skills (tasks, notes, briefing, focus mode done; others not chosen yet)
+- [~] Phase 6: voice and UX (new HUD, persona voices, confirm cards done; streaming TTS, local STT, wake word not yet)
+- [x] Phase 7: operations (doctor, launchd plist, daily backup, README)

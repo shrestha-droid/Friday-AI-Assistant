@@ -1,364 +1,229 @@
-import os
-import json
-import subprocess
-import psutil
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from google import genai
-from google.genai import types
-
-import tools 
-
-import logging
-import uuid
-import time
+"""Friday's server: thin routes, auth and lifespan. The thinking lives in the friday/ package."""
 import asyncio
+import json
+import logging
+import os
+import secrets
+import subprocess
+import time
+import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
-from fastapi import Request, status
-from fastapi.responses import JSONResponse
 
-# ==========================================
-# 1. INITIALIZE API & ENVIRONMENT & LOGGING
-# ==========================================
-load_dotenv()
+import psutil
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
-LOG_LEVEL = logging.DEBUG if os.getenv("DEBUG", "false").lower() == "true" else logging.INFO
-os.makedirs("logs", exist_ok=True)
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s [%(levelname)s] [%(request_id)s] %(message)s",
-    handlers=[
-        logging.FileHandler("friday.log"),
-        logging.StreamHandler()
-    ]
-)
+from friday import config, db, logging_setup, memory, personas
 
-class RequestIDFilter(logging.Filter):
-    def __init__(self, request_id="SYSTEM"):
-        super().__init__()
-        self.request_id = request_id
-    def filter(self, record):
-        if not hasattr(record, "request_id"):
-            record.request_id = self.request_id
-        return True
-
+logging_setup.setup()
 logger = logging.getLogger("friday")
-logger.addFilter(RequestIDFilter())
 
-API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-if not API_KEY:
-    logger.critical("Startup failed: GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required.")
-    raise RuntimeError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required.")
+import friday.tools  # noqa: E402,F401  (registers every tool)
+from friday.agent import Agent  # noqa: E402
+from friday.events import bus  # noqa: E402
+from friday.llm import GeminiLLM  # noqa: E402
+from friday.proactive import Proactive  # noqa: E402
+from friday.sessions import sessions  # noqa: E402
+from friday.tools import screen  # noqa: E402
+from friday.tools.system import read_system  # noqa: E402
+
+VERSION = "2.0.0"
 
 try:
-    client = genai.Client(api_key=API_KEY)
-except Exception as e:
-    logger.critical(f"Failed to initialize Gemini client: {str(e)}")
-    raise RuntimeError(f"Failed to initialize Gemini client: {str(e)}")
+    llm = GeminiLLM()
+except RuntimeError as e:
+    logger.critical("Startup failed: %s", e)
+    raise
+screen.set_llm(llm)
+agent = Agent(llm)
 
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
-FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
-HOST = os.getenv("HOST", "127.0.0.1")
-PORT = int(os.getenv("PORT", "3000"))
-ENABLE_HTTPS = os.getenv("ENABLE_HTTPS", "true").lower() == "true"
-SSL_CERTFILE = os.getenv("SSL_CERTFILE", "")
-SSL_KEYFILE = os.getenv("SSL_KEYFILE", "")
-ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", f"https://localhost:{PORT},http://localhost:{PORT},https://127.0.0.1:{PORT},http://127.0.0.1:{PORT}").split(",") if o.strip()]
-SESSION_TOKEN = os.getenv("FRIDAY_SESSION_TOKEN", "")
 
-app = FastAPI()
+def load_token():
+    """Generated once, kept in data/session_token (gitignored, owner-only). Never printed."""
+    config.DATA_DIR.mkdir(exist_ok=True)
+    if config.TOKEN_PATH.exists():
+        return config.TOKEN_PATH.read_text().strip()
+    tok = secrets.token_urlsafe(32)
+    config.TOKEN_PATH.write_text(tok)
+    config.TOKEN_PATH.chmod(0o600)
+    return tok
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
+
+TOKEN = load_token()
+SCHEME = "https" if config.ENABLE_HTTPS else "http"
+ALLOWED_HOSTS = {f"localhost:{config.PORT}", f"127.0.0.1:{config.PORT}"}
+ALLOWED_ORIGINS = {f"{SCHEME}://{h}" for h in ALLOWED_HOSTS}
+
+
+def guard(request: Request):
+    """Host check (DNS rebinding), Origin check (other websites), then the token."""
+    if request.headers.get("host", "") not in ALLOWED_HOSTS:
+        raise HTTPException(403, "Bad host.")
+    origin = request.headers.get("origin")
+    if origin and origin not in ALLOWED_ORIGINS:
+        raise HTTPException(403, "Bad origin.")
+    tok = request.cookies.get("friday_token") or request.headers.get("x-friday-token") or ""
+    if not secrets.compare_digest(tok, TOKEN):
+        logger.warning("Rejected request without a valid token: %s", request.url.path)
+        raise HTTPException(401, "Invalid session token.")
+
+
+@asynccontextmanager
+async def lifespan(app):
+    psutil.cpu_percent(interval=None)  # first reading is always 0, prime it
+    task = asyncio.create_task(Proactive(agent).run())
+    yield
+    task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
-    start_time = time.time()
-    
-    # Attach request_id to logging context
-    old_factory = logging.getLogRecordFactory()
-    def record_factory(*args, **kwargs):
-        record = old_factory(*args, **kwargs)
-        record.request_id = request_id
-        return record
-    logging.setLogRecordFactory(record_factory)
-
-    path = request.url.path
-    if path not in ["/health", "/api/health"]:
-        logger.info(f"Incoming {request.method} {path}")
-    
+    rid = request.headers.get("X-Request-ID", uuid.uuid4().hex[:8])
+    token = logging_setup.request_id.set(rid)
+    path, start = request.url.path, time.time()
+    quiet = path in ("/health", "/api/health", "/api/events", "/api/state")
     try:
+        if not quiet:
+            logger.info("Incoming %s %s", request.method, path)
         response = await call_next(request)
-        duration = (time.time() - start_time) * 1000
-        if path not in ["/health", "/api/health"]:
-            logger.info(f"Completed {request.method} {path} status={response.status_code} duration={duration:.2f}ms")
-        response.headers["X-Request-ID"] = request_id
+        if not quiet:
+            logger.info("Completed %s %s status=%s duration=%dms", request.method, path,
+                        response.status_code, (time.time() - start) * 1000)
+        response.headers["X-Request-ID"] = rid
         return response
-    except Exception as e:
-        duration = (time.time() - start_time) * 1000
-        logger.error(f"Failed {request.method} {path} error={str(e)} duration={duration:.2f}ms")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "An internal error occurred.", "request_id": request_id}
-        )
+    except Exception:
+        logger.exception("Failed %s %s", request.method, path)
+        return JSONResponse({"detail": "An internal error occurred.", "request_id": rid}, status_code=500)
     finally:
-        logging.setLogRecordFactory(old_factory)
+        logging_setup.request_id.reset(token)
+
 
 class CommandRequest(BaseModel):
     text: str
-    model: str = DEFAULT_MODEL
-    session_token: str | None = None
+    model: str | None = None
+    session_id: str | None = None
+    persona: str | None = None
 
-# ==========================================
-# 2. MEMORY & SYSTEM TOOLS
-# ==========================================
-MEMORY_FILE = "friday_memory.json"
 
-def load_memory_db():
-    if os.path.exists(MEMORY_FILE):
-        with open(MEMORY_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+class ConfirmRequest(BaseModel):
+    session_id: str
+    action_id: str
+    approve: bool
 
-def save_memory_db(data):
-    with open(MEMORY_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
 
-def store_memory(topic: str, content: str):
-    db = load_memory_db()
-    if topic in db:
-        db[topic] = db[topic] + " | " + content
-    else:
-        db[topic] = content
-    save_memory_db(db)
-    return f"Successfully stored memory for topic: '{topic}'"
+def _session(session_id):
+    if session_id and len(session_id) > 64:
+        raise HTTPException(400, "Bad session id.")
+    return sessions.get(session_id)
 
-def query_memory(query: str):
-    db = load_memory_db()
-    query_lower = query.lower()
-    for topic, content in db.items():
-        if query_lower in topic.lower() or query_lower in content.lower():
-            return f"Memory retrieved -> {topic}: {content}"
-    return "No relevant information found in memory."
 
-def get_system_stats():
-    cpu = psutil.cpu_percent(interval=None)
-    ram = psutil.virtual_memory().percent
-    disk = psutil.disk_usage('/').percent
-    return f"MacBook Status -> CPU: {cpu}% | RAM: {ram}% | Disk: {disk}%"
-
-def open_application(app_name: str):
-    try:
-        subprocess.run(["open", "-a", app_name], check=True)
-        return f"Successfully launched {app_name}."
-    except Exception as e:
-        return f"Failed to launch {app_name}: {str(e)}"
-
-def execute_terminal_command(command: str):
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=15)
-        output = result.stdout if result.stdout else result.stderr
-        return output if output else "Command executed with no output."
-    except Exception as e:
-        return f"Execution error: {str(e)}"
-
-def enter_standby():
-    return "Going to sleep."
-
-# ==========================================
-# 3. CORE AI SETUP
-# ==========================================
-try:
-    with open("system_prompt.txt", "r") as file:
-        FRIDAY_SYSTEM_INSTRUCTION = file.read()
-except FileNotFoundError:
-    FRIDAY_SYSTEM_INSTRUCTION = "You are Friday, an AI assistant."
-
-EMOTION_DIRECTIVE = """
-CRITICAL DIRECTIVE: Keep your responses incredibly brief. 1 to 2 short sentences maximum. 
-You are communicating via a fast text-to-speech engine in a browser. Be conversational.
-"""
-FRIDAY_SYSTEM_INSTRUCTION += EMOTION_DIRECTIVE
-
-tools_list = [
-    tools.get_system_time, tools.list_workspace_files, tools.read_file_content,
-    get_system_stats, open_application, execute_terminal_command, store_memory, query_memory, enter_standby
-]
-
-for tool_name in ["write_file_content", "read_latest_emails", "draft_visual_email", "draft_calendar_event", "shutdown_system", "analyze_screen"]:
-    if hasattr(tools, tool_name):
-        tools_list.append(getattr(tools, tool_name))
-
-tool_execution_map = {t.__name__: t for t in tools_list}
-
-config = types.GenerateContentConfig(
-    system_instruction=FRIDAY_SYSTEM_INSTRUCTION,
-    tools=tools_list,
-    temperature=0.4 
-)
-
-command_lock = asyncio.Lock()
-
-# ==========================================
-# 4. THE API ENDPOINTS
-# ==========================================
 @app.get("/health")
 @app.get("/api/health")
-async def health_check():
-    """Returns backend status, version, and Gemini client configuration state."""
-    gemini_configured = False
-    try:
-        if client:
-            gemini_configured = True
-    except Exception:
-        pass
-    return {
-        "status": "online",
-        "version": "1.0.0",
-        "gemini_configured": gemini_configured,
-        "timestamp": datetime.now().isoformat()
-    }
+async def health():
+    return {"status": "online", "version": VERSION, "gemini_configured": True,
+            "model": config.DEFAULT_MODEL, "timestamp": datetime.now().isoformat()}
+
 
 @app.get("/")
-async def serve_ui():
-    """Serves the index.html file"""
-    return FileResponse("index.html")
+async def serve_ui(request: Request):
+    if request.headers.get("host", "") not in ALLOWED_HOSTS:
+        raise HTTPException(403, "Bad host.")
+    resp = FileResponse(config.ROOT / "index.html", headers={"Cache-Control": "no-store"})
+    # ponytail: any local process can GET / and read this cookie. It stops other WEBSITES, not local malware.
+    resp.set_cookie("friday_token", TOKEN, httponly=True, samesite="strict", secure=config.ENABLE_HTTPS)
+    return resp
 
-@app.get("/api/models")
+
+@app.get("/api/models", dependencies=[Depends(guard)])
 async def list_models():
-    """Returns a list of accessible Gemini models based on the API key"""
     try:
+        models = await asyncio.to_thread(llm.list_models)
+    except Exception:
+        logger.exception("model listing failed")
         models = []
-        for m in client.models.list():
-            if hasattr(m, 'supported_generation_methods') and 'generateContent' in m.supported_generation_methods:
-                model_name = m.name.replace('models/', '')
-                models.append(model_name)
-            elif hasattr(m, 'name'):
-                model_name = m.name.replace('models/', '')
-                if 'gemini' in model_name:
-                    models.append(model_name)
-        if not models:
-            models = [DEFAULT_MODEL] + FALLBACK_MODELS
-        return {"models": sorted(list(set(models)))}
-    except Exception as e:
-        logger.error(f"Model List Error: {str(e)}")
-        return {"models": sorted(list(set([DEFAULT_MODEL] + FALLBACK_MODELS)))}
+    models = sorted(set(models) | {config.DEFAULT_MODEL, *config.FALLBACK_MODELS})
+    return {"models": models, "default": config.DEFAULT_MODEL}
 
-@app.post("/api/command")
-async def handle_command(request: CommandRequest):
-    if SESSION_TOKEN and request.session_token != SESSION_TOKEN:
-        logger.warning("Unauthorized API request attempt with invalid/missing session token.")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
 
-    user_text = request.text.strip()
-    if not user_text:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Command text cannot be empty.")
-    if len(user_text) > 4000:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Command text exceeds maximum allowed length of 4000 characters.")
+@app.post("/api/command", dependencies=[Depends(guard)])
+async def command(req: CommandRequest):
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(400, "Command text cannot be empty.")
+    if len(text) > 4000:
+        raise HTTPException(400, "Command text exceeds 4000 characters.")
+    logger.info("Processing command length=%d persona=%s", len(text), req.persona)
+    return await agent.run_turn(_session(req.session_id), text, req.model, req.persona)
 
-    requested_model = request.model if request.model else DEFAULT_MODEL
-    logger.info(f"Processing command (Model: {requested_model}) length={len(user_text)}")
-    
-    async with command_lock:
+
+@app.post("/api/confirm", dependencies=[Depends(guard)])
+async def confirm(req: ConfirmRequest):
+    return await agent.confirm(_session(req.session_id), req.action_id, req.approve)
+
+
+@app.post("/api/brief", dependencies=[Depends(guard)])
+async def brief():
+    from friday.tools.productivity import briefing_facts
+    return {"response": await agent.narrate(briefing_facts())}
+
+
+@app.get("/api/state", dependencies=[Depends(guard)])
+async def state():
+    with db.db() as c:
+        reminders = [dict(r) for r in c.execute(
+            "SELECT id,text,due_at,repeat_rule FROM reminders WHERE status='pending' ORDER BY due_at LIMIT 10")]
+        tasks = [dict(r) for r in c.execute(
+            "SELECT id,title,due_at FROM tasks WHERE status='open' ORDER BY due_at IS NULL, due_at LIMIT 10")]
+    return {"system": read_system(), "reminders": reminders, "tasks": tasks, "memory": memory.list_facts()[-20:],
+            "focus_until": float(db.meta_get("focus_until", 0)),
+            "personas": {k: v["label"] for k, v in personas.PERSONAS.items()}}
+
+
+@app.delete("/api/memory/{fact_id}", dependencies=[Depends(guard)])
+async def delete_memory(fact_id: int):
+    return {"deleted": memory.forget(fact_id)}
+
+
+@app.get("/api/events", dependencies=[Depends(guard)])
+async def events(request: Request):
+    q = bus.subscribe()
+
+    async def stream():
         try:
-            active_chat = client.chats.create(model=requested_model, config=config)
-            
-            def run_gemini():
-                return active_chat.send_message(user_text)
-
-            try:
-                response = await asyncio.wait_for(asyncio.to_thread(run_gemini), timeout=30.0)
-            except asyncio.TimeoutError:
-                logger.error("Gemini API call timed out.")
-                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="The AI service request timed out.")
-
-            tool_iterations = 0
-            while response.function_calls and tool_iterations < 10:
-                tool_iterations += 1
-                function_responses = []
-                for fn in response.function_calls:
-                    logger.info(f"Executing tool: {fn.name}")
-                    if fn.name in tool_execution_map:
-                        try:
-                            result = tool_execution_map[fn.name](**fn.args) if fn.args else tool_execution_map[fn.name]()
-                        except Exception as tool_err:
-                            logger.error(f"Tool execution error in {fn.name}: {str(tool_err)}")
-                            result = f"Error executing tool {fn.name}: internal error."
-                    else:
-                        logger.warning(f"Requested unauthorized or missing tool: {fn.name}")
-                        result = f"Error: Tool {fn.name} is not armed."
-                        
-                    function_responses.append(
-                        types.Part.from_function_response(
-                            name=fn.name,
-                            response={"result": str(result)}
-                        )
-                    )
-                
-                def run_gemini_tools():
-                    return active_chat.send_message(function_responses)
-
+            yield "retry: 3000\n\n"
+            while not await request.is_disconnected():
                 try:
-                    response = await asyncio.wait_for(asyncio.to_thread(run_gemini_tools), timeout=30.0)
+                    ev = await asyncio.wait_for(q.get(), 15)
                 except asyncio.TimeoutError:
-                    logger.error("Gemini API tool-response call timed out.")
-                    raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="The AI service request timed out during tool execution.")
-                
-            ai_reply = response.text if response.text else "Operation completed."
-            logger.info("Command completed successfully.")
-            return {"response": ai_reply}
-            
-        except HTTPException as he:
-            raise he
-        except Exception as e:
-            err_str = str(e).lower()
-            logger.error(f"Gemini API error: {str(e)}")
-            if "api key" in err_str or "auth" in err_str or "credential" in err_str:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Gemini authentication failure. Verify API credentials.")
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The AI service request failed.")
+                    yield ": keepalive\n\n"
+                    continue
+                yield f"data: {json.dumps(ev, default=str)}\n\n"
+        finally:
+            bus.unsubscribe(q)
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info(f"========================================")
-    logger.info(f" FRIDAY BRAIN ONLINE ({HOST}:{PORT}, HTTPS={ENABLE_HTTPS})")
-    logger.info(f"========================================")
-    
-    server_kwargs = {
-        "host": HOST,
-        "port": PORT,
-        "log_level": "info"
-    }
-    
-    if ENABLE_HTTPS:
-        if SSL_CERTFILE and SSL_KEYFILE and os.path.exists(SSL_CERTFILE) and os.path.exists(SSL_KEYFILE):
-            server_kwargs["ssl_certfile"] = SSL_CERTFILE
-            server_kwargs["ssl_keyfile"] = SSL_KEYFILE
-        else:
-            # Generate a temporary dev self-signed cert or use standard fallback paths if available
-            cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
-            os.makedirs(cert_dir, exist_ok=True)
-            cert_path = os.path.join(cert_dir, "cert.pem")
-            key_path = os.path.join(cert_dir, "key.pem")
-            if not (os.path.exists(cert_path) and os.path.exists(key_path)):
-                try:
-                    subprocess.run([
-                        "openssl", "req", "-x509", "-newkey", "rsa:2048",
-                        "-keyout", key_path, "-out", cert_path, "-days", "365",
-                        "-nodes", "-subj", "/CN=localhost"
-                    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
-            if os.path.exists(cert_path) and os.path.exists(key_path):
-                server_kwargs["ssl_certfile"] = cert_path
-                server_kwargs["ssl_keyfile"] = key_path
 
-    uvicorn.run(app, **server_kwargs)
+    logger.info("FRIDAY BRAIN ONLINE (%s:%s, https=%s, model=%s)", config.HOST, config.PORT,
+                config.ENABLE_HTTPS, config.DEFAULT_MODEL)
+    kwargs = {"host": config.HOST, "port": config.PORT, "log_level": "warning"}
+    if config.ENABLE_HTTPS:
+        cert, key = config.SSL_CERTFILE, config.SSL_KEYFILE
+        if not (cert and key and os.path.exists(cert) and os.path.exists(key)):
+            cert_dir = config.ROOT / "certs"
+            cert_dir.mkdir(exist_ok=True)
+            cert, key = str(cert_dir / "cert.pem"), str(cert_dir / "key.pem")
+            if not (os.path.exists(cert) and os.path.exists(key)):
+                subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", key, "-out", cert,
+                                "-days", "365", "-nodes", "-subj", "/CN=localhost"],
+                               check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        kwargs.update(ssl_certfile=cert, ssl_keyfile=key)
+    uvicorn.run(app, **kwargs)
