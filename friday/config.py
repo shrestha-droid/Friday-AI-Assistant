@@ -28,7 +28,7 @@ def pick_model(value, default):
 
 # --- model ---
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-DEFAULT_MODEL = pick_model(os.getenv("DEFAULT_MODEL"), "gemini-3.8-flash")
+DEFAULT_MODEL = pick_model(os.getenv("DEFAULT_MODEL"), "gemini-3.5-flash")
 # The live API often answers 503 "high demand" on one model while another is fine, so keep a wide chain.
 FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                    "gemini-flash-latest", "gemini-3.8-flash"]

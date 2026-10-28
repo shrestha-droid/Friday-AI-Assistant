@@ -250,6 +250,41 @@ async def tts(req: SpeakRequest):
     return Response(wav, media_type="audio/wav", headers={"X-Voice-Engine": engine})
 
 
+def greeting(now=None):
+    from friday.tools.system import read_system
+    now = now or datetime.now(config.TZ)
+    part = "morning" if 5 <= now.hour < 12 else "afternoon" if now.hour < 17 else "evening" if now.hour < 22 else "night"
+    s = read_system()
+    batt = f" Battery's at {s['battery']} percent." if s["battery"] is not None and not s["plugged"] else ""
+    return (f"Good {part}, boss. All systems online.{batt}" if part != "night"
+            else f"Working late again, boss. All systems online.{batt}")
+
+
+def say_out_loud(text):
+    """Speaker playback on the Mac itself: no browser needed, so it works the instant Friday wakes."""
+    import tempfile
+    try:
+        wav = tts_local.speak(personas.spoken(text), *personas.kokoro_voice_for("friday")) if tts_local.available() else None
+    except Exception:
+        wav = None
+    if wav is None:
+        subprocess.run(["say", personas.spoken(text)], timeout=30)
+        return
+    with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+        f.write(wav)
+        f.flush()
+        subprocess.run(["afplay", f.name], timeout=60)
+
+
+@app.post("/api/wake", dependencies=[Depends(guard)])
+async def wake():
+    """The wake-up call (Friday.app): greet out loud through the Mac's speakers."""
+    text = greeting()
+    asyncio.create_task(asyncio.to_thread(say_out_loud, text))
+    bus.publish("briefing", message=text, priority="normal")
+    return {"response": text}
+
+
 @app.post("/api/stt", dependencies=[Depends(guard)])
 async def stt(request: Request):
     """The page records the mic itself (works in Brave) and sends a WAV; we turn it into text."""

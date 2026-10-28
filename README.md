@@ -3,7 +3,15 @@
 A voice-and-text assistant for your Mac. Friday, J.A.R.V.I.S. and E.D.I.T.H. are three personas on one brain.
 Something older and quieter lives underneath all of them. See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for the glasses, mat and robot.
 
-## Run it
+## Wake it
+
+Open **Friday** (Spotlight: ⌘Space, type "Friday", Enter; or drag `~/Applications/Friday.app` to the Dock).
+It starts the server if it is asleep, greets you out loud through the Mac's speakers, and opens the interface.
+For "Hey Siri, wake Friday" or a keyboard shortcut: in the Shortcuts app make a shortcut "Wake Friday" with one
+action, *Open App → Friday*; Siri picks up its name, and its settings let you assign a key combo.
+Rebuild the app after moving this folder: `scripts/make_app.sh`.
+
+## Run it by hand
 
 ```bash
 friday_env/bin/python friday_server.py        # https://127.0.0.1:3000  (or use the menu-bar app)
