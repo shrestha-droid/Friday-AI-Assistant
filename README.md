@@ -19,7 +19,9 @@ within 6 seconds of her last answer. It stays on between visits; browsers need o
 ```bash
 cp scripts/com.friday.server.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.friday.server.plist
 ```
-Remove it with `launchctl bootout gui/$(id -u)/com.friday.server`. Don't run the menu-bar app at the same time.
+Restart it with `launchctl kickstart -k gui/$(id -u)/com.friday.server`; remove it with `launchctl bootout gui/$(id -u)/com.friday.server`.
+"Bootstrap failed: 5" just means it is already loaded. If it keeps restarting, another Friday holds port 3000:
+`pkill -f friday_server.py` (that pattern matches however it was started). Don't run the menu-bar app at the same time.
 
 ## Run it by hand
 
