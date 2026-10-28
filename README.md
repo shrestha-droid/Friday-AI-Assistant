@@ -76,6 +76,19 @@ wireframe house. Engine room in the basement (system, terminal), Friday's study 
 EDITH's lookout upstairs with the big window. Rooms light up as their tools run. One banister never quite meets its post.
 Ultron is in the attic, behind a locked door that leaks red light and strains when he speaks.
 
+## Brains and ears
+
+**Switching brains:** the BRAIN menu in the LINK panel lists every Ollama model on this Mac (LOCAL) and every Gemini 3+ model
+(CLOUD). The model Hermes Agent uses is marked HERMES. You can also just say or type "use hermes", "switch to qwen",
+"use gemini 3.5 flash". Local models get longer timeouts and are never raced against the cloud; if Ollama is down, Friday
+falls back to Gemini and says which model answered. `friday/local_llm.py` translates history and tools to Ollama's
+OpenAI-style API, and also understands models that write tool calls as text or in Hermes `<tool_call>` tags.
+Small models (e.g. qwen2.5-coder:3b) often skip their tools and invent numbers; use a 7B+ tool-calling model for real work.
+
+**Hearing:** Chrome and Safari use their built-in speech recognition. Brave blocks that, so there the page records the mic
+itself and Friday transcribes it with local Whisper (`base.en`, ~0.3 s per sentence, offline, in `data/models/`), falling
+back to Gemini if Whisper is missing.
+
 ## Configuration (`.env`, all optional)
 
 `DEFAULT_MODEL` (Gemini 3+ only), `BRIEFING_TIME=08:00`, `QUIET_HOURS=23:00-07:00`, `FRIDAY_TZ=Asia/Calcutta`,

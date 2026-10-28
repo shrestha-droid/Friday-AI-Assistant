@@ -2,7 +2,7 @@
 import logging
 import os
 import re
-from pathlib import Path
+from pathlib import Path  # noqa: F401  (also used as config.Path)
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -34,6 +34,16 @@ FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-f
                    "gemini-flash-latest", "gemini-3.8-flash"]
 THINKING_LEVEL = os.getenv("THINKING_LEVEL", "MINIMAL")  # voice assistant: speed over depth
 STICKY_MODEL_S = 5 * 60   # after a fallback answers, try it first for this long
+# Local models through Ollama. Pick one in the UI; ids look like "ollama/qwen2.5-coder:3b".
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
+LOCAL_CALL_TIMEOUT_S = 60     # local models think slower than the cloud; no hedging while they do
+LOCAL_TURN_BUDGET_S = 150
+
+
+def is_local(model):
+    return (model or "").startswith("ollama/")
+
+
 ULTRON_ASIDE_RATE = float(os.getenv("ULTRON_ASIDE_RATE", "0.5"))   # share of replies where Ultron cuts in
 
 # --- voices: Kokoro (local, free) first, then Gemini TTS, then the browser voice ---
@@ -41,7 +51,9 @@ KOKORO_MODEL = ROOT / "data" / "voices" / "kokoro-v1.0.int8.onnx"
 KOKORO_VOICES = ROOT / "data" / "voices" / "voices-v1.0.bin"
 TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
 TTS_MAX_CHARS = 600
-STT_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash"]   # speech-to-text for Brave
+STT_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash"]   # cloud fallback for speech-to-text
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")   # local speech-to-text, ~0.3 s per sentence
+WHISPER_DIR = ROOT / "data" / "models"
 STT_MAX_BYTES = 2_000_000   # ~60 s of 16 kHz mono WAV
 # Written -> spoken. The owner's name is pronounced "Shresht Pandey".
 PRONOUNCE = {"Shrestha": "Shresht"}

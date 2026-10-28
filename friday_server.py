@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from pydantic import BaseModel
 
 from friday import config, db, logging_setup, memory, personas
+from friday import stt as stt_local
 from friday import tts as tts_local
 
 logging_setup.setup()
@@ -149,7 +150,20 @@ async def list_models():
         logger.exception("model listing failed")
         models = []
     models = sorted(set(models) | {config.DEFAULT_MODEL, *config.FALLBACK_MODELS})
-    return {"models": models, "default": config.DEFAULT_MODEL}
+    return {"models": models, "local": await llm.local.list_models(), "default": config.DEFAULT_MODEL,
+            "hermes": hermes_model()}
+
+
+def hermes_model():
+    """The model Hermes Agent is set to use (only the model name is read from its config, nothing else)."""
+    import re
+    try:
+        text = (config.Path.home() / ".hermes" / "config.yaml").read_text()
+    except OSError:
+        return None
+    block = re.search(r"^model:\s*\n((?:[ \t]+.*\n)+)", text, re.M)
+    name = re.search(r"^\s+default:\s*(\S+)", block.group(1), re.M) if block else None
+    return name.group(1) if name else None
 
 
 @app.post("/api/command", dependencies=[Depends(guard)])
@@ -226,6 +240,11 @@ async def stt(request: Request):
     data = await request.body()
     if not data or len(data) > config.STT_MAX_BYTES:
         raise HTTPException(400, "Bad audio.")
+    if stt_local.available():
+        try:
+            return {"text": await asyncio.to_thread(stt_local.transcribe, data), "engine": "whisper"}
+        except Exception:
+            logger.exception("local whisper failed, trying Gemini")
     try:
         return {"text": await llm.transcribe(data, request.headers.get("content-type", "audio/wav")), "engine": "gemini"}
     except LLMError:

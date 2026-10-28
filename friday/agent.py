@@ -104,7 +104,8 @@ class Agent:
     # ---------- the loop ----------
     async def _drive(self, session, turn, resume):
         try:
-            async with asyncio.timeout(config.TURN_BUDGET_S):
+            budget = config.LOCAL_TURN_BUDGET_S if config.is_local(turn.model) else config.TURN_BUDGET_S
+            async with asyncio.timeout(budget):
                 return await self._loop(session, turn, resume)
         except TimeoutError:
             return self._fail(session, turn, "partial",
@@ -151,7 +152,8 @@ class Agent:
         """Try models in order, but if one is slow start the next IN PARALLEL (hedging) and take the first answer.
         The live API often answers 503 or stalls on one model while another is fine."""
         good, until = self.good
-        first = [good] if good and time.monotonic() < until else []
+        # a model the owner picked locally is respected: no sticky cloud model jumps ahead of it
+        first = [good] if good and time.monotonic() < until and not config.is_local(turn.model) else []
         queue = list(dict.fromkeys(first + [turn.model] + config.FALLBACK_MODELS))
         contents, tools = list(session.contents), registry.declarations()
         running: dict[asyncio.Task, str] = {}
@@ -159,13 +161,16 @@ class Agent:
 
         def start(model):
             coro = self.llm.generate(model, contents, turn.system, tools)
-            running[asyncio.create_task(asyncio.wait_for(coro, config.MODEL_CALL_TIMEOUT_S))] = model
+            limit = config.LOCAL_CALL_TIMEOUT_S if config.is_local(model) else config.MODEL_CALL_TIMEOUT_S
+            running[asyncio.create_task(asyncio.wait_for(coro, limit))] = model
 
         try:
             while queue or running:
                 if queue and not running:
                     start(queue.pop(0))
-                done, _ = await asyncio.wait(running, timeout=config.HEDGE_AFTER_S if queue else None,
+                # never hedge against a local model: it is slow by nature, and racing the cloud would defeat the choice
+                local = any(config.is_local(m) for m in running.values())
+                done, _ = await asyncio.wait(running, timeout=config.HEDGE_AFTER_S if queue and not local else None,
                                              return_when=asyncio.FIRST_COMPLETED)
                 if not done:
                     start(queue.pop(0))      # the leader is slow: race the next model against it

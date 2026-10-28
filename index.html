@@ -227,7 +227,7 @@ select { border: 1px solid var(--line2); padding: 6px 8px; font: 400 11px var(--
     </div>
     <div class="panel">
       <div class="ph"><b>02</b>Link</div>
-      <div class="kv"><span>MODEL</span><span></span><span id="v-model">--</span></div>
+      <div class="kv"><span>BRAIN</span><select id="model" aria-label="Brain model" style="grid-column: 2 / 4; max-width: none"></select></div>
       <div class="kv"><span>LATENCY</span><span></span><span id="v-lat">--</span></div>
       <div class="kv"><span>VOICE</span><span></span><span id="v-voice">--</span></div>
       <div class="kv"><span>SESSION</span><span></span><span id="v-sid">--</span></div>
@@ -282,7 +282,6 @@ select { border: 1px solid var(--line2); padding: 6px 8px; font: 400 11px var(--
 
 <section id="settings" hidden aria-label="Settings">
   <div class="ph"><b>05</b>Settings</div>
-  <div class="field"><span>MODEL</span><select id="model"></select></div>
   <div class="field"><span>VOICE</span><select id="engine"><option value="gemini">Character voices</option><option value="browser">Browser voice</option><option value="off">Silent</option></select></div>
   <div class="field"><span>ALWAYS LISTENING</span><button class="sw" id="sw-always" role="switch" aria-checked="false" aria-label="Always listening"></button></div>
   <button class="wide" id="brief">BRIEF ME</button>
@@ -547,8 +546,22 @@ async function api(path, body, method) {
   if (r.status === 401 || r.status === 403) { toast('SESSION', 'Reload the page to reconnect.', true); throw new Error('auth'); }
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'request failed'); return j;
 }
+// "use hermes", "switch to qwen", "switch to gemini 3.5 flash": change the brain without touching a menu.
+function switchBrain(text) {
+  const m = text.match(/^(?:please\s+)?(?:switch(?:\s+the\s+brain)?\s+to|use)\s+(.+?)(?:\s+(?:model|brain))?[.!]?$/i);
+  if (!m) return false;
+  const want = m[1].toLowerCase().replace(/\s+/g, ' '), sel = $('#model');
+  const opt = [...sel.options].find(o => o.text.toLowerCase().replace(/\s+/g, ' ').includes(want));
+  if (!opt) return false;
+  sel.value = opt.value; sel.onchange();
+  const segs = [{ who: S.persona, text: `Switched to ${opt.text.replace(/\s+·.*|\s+\(.*/, '').trim()}.` }];
+  logEntry('you', text); show(segs); logEntry(S.persona, segs[0].text); sayAll(segs);
+  return true;
+}
+
 async function send(text) {
   text = text.trim(); if (!text || S.busy) return;
+  if (switchBrain(text)) return;
   stopSpeaking(); S.busy = true; setMood('normal'); setState('thinking');
   logEntry('you', text); $('#line').className = 'dim'; $('#line').textContent = text; $('#uline').classList.remove('on'); $('#meta').textContent = '';
   try { handle(await api('/api/command', { text, model: $('#model').value || undefined, session_id: SID, persona: S.persona })); }
@@ -562,8 +575,8 @@ function handle(r) {
   else { hideConfirm(); show(segs, r.status === 'partial' || r.status === 'error' ? 'bad' : ''); }
   segs.forEach(s => logEntry(s.who, s.text));
   tele.lat = (r.ms / 1000).toFixed(1) + 's'; tele.model = r.model;
-  $('#v-lat').textContent = tele.lat; $('#v-model').textContent = (r.model || '').replace('gemini-', '');
-  $('#meta').textContent = `${(r.steps || []).length} TOOL${(r.steps || []).length === 1 ? '' : 'S'} · ${tele.lat}`;
+  $('#v-lat').textContent = tele.lat;
+  $('#meta').textContent = `${(r.model || '').replace('ollama/', '').replace('gemini-', '').toUpperCase()} · ${(r.steps || []).length} TOOL${(r.steps || []).length === 1 ? '' : 'S'} · ${tele.lat}`;
   const used = (r.steps || []).map(s => s.tool);
   if (used.includes('enter_standby')) { stopRec(); S.always = false; setSwitch(false); setState('off'); }
   if (S.state !== 'off') { setState('idle'); if (r.status !== 'needs_confirmation') sayAll(segs); else sayAll([{ who: r.persona, text: 'I need your authorization for that.' }]); }
@@ -776,10 +789,18 @@ function connect() {
   const tick = () => $('#clock').textContent = clockStr(); tick(); setInterval(tick, 1000);
   try {
     const ms = await api('/api/models'), sel = $('#model');
-    ms.models.forEach(m => sel.add(new Option(m.replace('gemini-', ''), m)));
+    const group = (label, items, name) => {
+      if (!items.length) return; const g = document.createElement('optgroup'); g.label = label;
+      items.forEach(m => g.append(new Option(name(m), m))); sel.append(g);
+    };
+    group('LOCAL · OLLAMA', ms.local || [], m => {
+      const n = m.replace('ollama/', '');
+      return n + (ms.hermes === n ? '  · HERMES' : '') + (n.endsWith('-cloud') ? '  (ollama cloud)' : '');
+    });
+    group('CLOUD · GEMINI', ms.models, m => m.replace('gemini-', 'gemini '));
     sel.value = store.get('model', ms.default) || ms.default; if (!sel.value) sel.value = ms.default;
-    sel.onchange = () => store.set('model', sel.value);
-    tele.model = sel.value; $('#v-model').textContent = sel.value.replace('gemini-', '');
+    sel.onchange = () => { store.set('model', sel.value); tele.model = sel.value; toast('BRAIN', sel.selectedOptions[0].text.trim()); };
+    tele.model = sel.value;
     setState('idle'); connect(); poll(); setInterval(poll, 4000);
   } catch { $('#status').lastChild.textContent = 'offline'; show([{ who: S.persona, text: 'The core is not answering. Start friday_server.py.' }], 'bad'); }
 })();

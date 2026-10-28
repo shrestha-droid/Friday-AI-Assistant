@@ -9,3 +9,4 @@ pyaudio
 pytest
 httpx
 kokoro-onnx
+faster-whisper

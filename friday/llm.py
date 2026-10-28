@@ -37,6 +37,8 @@ class GeminiLLM:
         self.client = genai.Client(api_key=config.API_KEY,
                                    http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1)))
         self.no_minimal = set()   # models that reject thinking_level=MINIMAL (learned at runtime)
+        from .local_llm import OllamaLLM   # here, not at the top: local_llm imports this module
+        self.local = OllamaLLM()
 
     def _cfg(self, model, system, tools):
         level = "LOW" if model in self.no_minimal and config.THINKING_LEVEL == "MINIMAL" else config.THINKING_LEVEL
@@ -50,6 +52,8 @@ class GeminiLLM:
         return types.GenerateContentConfig(**kw)
 
     async def generate(self, model, contents, system, tools=None):
+        if config.is_local(model):
+            return await self.local.generate(model, contents, system, tools)
         for attempt in (1, 2):
             try:
                 resp = await self.client.aio.models.generate_content(
