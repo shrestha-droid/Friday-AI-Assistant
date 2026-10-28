@@ -93,6 +93,8 @@ RAM_HIGH_FOR_S = 120
 TICK_S = 5
 WATCH_EVERY_S = 60
 
+CLAUDE_TIMEOUT_S = 30 * 60   # a Claude Code job may run this long in the background
+
 # --- storage ---
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "friday.db"

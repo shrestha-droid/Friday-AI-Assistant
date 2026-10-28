@@ -779,6 +779,7 @@ function connect() {
     } else if (ev.kind === 'confirm') { if (!S.confirm || S.confirm.action_id !== ev.action_id) showConfirm(ev); }
     else if (ev.kind === 'reminder') { const t = ev.message.replace(/^Reminder: /, ''); toast('REMINDER', t, true); logEntry('sys', ev.message); sayAll([{ who: S.persona, text: ev.message }]); }
     else if (ev.kind === 'alert') { toast('ADVISORY', ev.message, ev.priority === 'high'); logEntry('sys', ev.message); if (ev.priority === 'high') sayAll([{ who: S.persona, text: ev.message }]); }
+    else if (ev.kind === 'claude') { toast('CLAUDE', ev.message, true); logEntry('sys', ev.message); sayAll([{ who: S.persona, text: ev.message }]); }
     else if (ev.kind === 'briefing') { const segs = [{ who: S.persona, text: ev.message }]; toast('MORNING BRIEFING', ev.message); show(segs); logEntry(S.persona, ev.message); sayAll(segs); }
   };
 }

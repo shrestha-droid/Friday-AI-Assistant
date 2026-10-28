@@ -60,3 +60,14 @@ def test_taint_upgrades_acting_tools_only():
 def test_untrusted_wrapper():
     out = permissions.wrap_untrusted("read_latest_emails", "hi")
     assert out.startswith('<untrusted_content source="read_latest_emails">') and out.endswith("</untrusted_content>")
+
+
+def test_device_tools_have_the_right_tiers(roots, tmp_path_factory):
+    import friday.tools  # noqa: F401
+    from friday import registry
+    from friday.tools import mac
+    for name in ["quit_application", "wifi", "power"]:
+        assert registry.get(name).tier == CONFIRM
+    assert registry.get("ask_claude").resolve({"folder": str(roots)})[0] == CONFIRM
+    assert registry.get("ask_claude").resolve({"folder": str(tmp_path_factory.mktemp("elsewhere"))})[0] == BLOCKED
+    assert "Only http" in mac.open_url("file:///etc/passwd")

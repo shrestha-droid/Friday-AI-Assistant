@@ -29,6 +29,7 @@ from friday.events import bus  # noqa: E402
 from friday.llm import GeminiLLM, LLMError  # noqa: E402
 from friday.proactive import Proactive  # noqa: E402
 from friday.sessions import sessions  # noqa: E402
+from friday.tools import claude as claude_tools  # noqa: E402
 from friday.tools import screen  # noqa: E402
 from friday.tools.system import read_system  # noqa: E402
 
@@ -91,6 +92,7 @@ async def lifespan(app):
     psutil.cpu_percent(interval=None)  # first reading is always 0, prime it
     task = asyncio.create_task(Proactive(agent).run())
     asyncio.create_task(warm_up())
+    claude_tools.LOOP = asyncio.get_running_loop()   # background Claude jobs announce through the event bus
     yield
     task.cancel()
 

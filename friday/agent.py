@@ -66,12 +66,15 @@ class Agent:
             session.persona = persona if persona in personas.PERSONAS else session.persona
             turn = Turn(persona=session.persona, model=config.pick_model(model, config.DEFAULT_MODEL),
                         mark=len(session.contents))
-            quick = fast.answer(text, session.persona)
-            if quick:   # status questions: answered from the machine directly, no model round trip
-                session.contents += [user_text(text), model_text(quick)]
+            quick = fast.answer(text, session.persona, session.tainted)
+            if quick:   # status questions and device commands: done directly, no model round trip
+                spoken, tool_name = quick
+                session.contents += [user_text(text), model_text(spoken)]
                 turn.used_model = "instant"
-                out = self._result(session, turn, "ok", quick)
-                out["steps"] = [{"tool": "instant", "tier": "safe", "ms": 0}]
+                db.audit(session.id, tool_name, {"text": text[:100]}, "safe", "allowed (instant)", "", len(spoken))
+                bus.publish("tool", name=tool_name, state="running")
+                out = self._result(session, turn, "ok", spoken)
+                out["steps"] = [{"tool": tool_name, "tier": "safe", "ms": 0}]
                 return out
             turn.system = personas.build_system(turn.persona, memory.memory_block(text))
             session.contents.append(user_text(text))
@@ -231,6 +234,8 @@ class Agent:
         except asyncio.TimeoutError:
             # ponytail: the worker thread cannot be killed, it only stops being awaited. No NEW tool starts after this.
             out = f"Error: {name} timed out after {config.TOOL_TIMEOUT_S}s."
+        except RuntimeError as e:      # tools raise RuntimeError with a message meant for the owner
+            out = f"Error: {e}"
         except Exception as e:
             log.exception("tool=%s failed", name)
             out = f"Error executing {name}: {type(e).__name__}."
