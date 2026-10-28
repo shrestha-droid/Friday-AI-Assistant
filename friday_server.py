@@ -73,10 +73,24 @@ def guard(request: Request):
         raise HTTPException(401, "Invalid session token.")
 
 
+async def warm_up():
+    """Load the voice and ear models at startup so the first command is as fast as the rest."""
+    from friday.llm import _wav
+    try:
+        if tts_local.available():
+            await asyncio.to_thread(tts_local.speak, "Ready.", "af_bella", 1.0)
+        if stt_local.available():
+            await asyncio.to_thread(stt_local.transcribe, _wav(b"\x00\x00" * 8000, 16000))
+        logger.info("voice models warm")
+    except Exception:
+        logger.exception("warm-up failed (voices will load on first use)")
+
+
 @asynccontextmanager
 async def lifespan(app):
     psutil.cpu_percent(interval=None)  # first reading is always 0, prime it
     task = asyncio.create_task(Proactive(agent).run())
+    asyncio.create_task(warm_up())
     yield
     task.cancel()
 

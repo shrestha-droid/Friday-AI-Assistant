@@ -147,6 +147,10 @@ def user_text(text):
     return types.Content(role="user", parts=[types.Part(text=text)])
 
 
+def model_text(text):
+    return types.Content(role="model", parts=[types.Part(text=text)])
+
+
 def tool_results(results):
     """results: [(name, call_id, result_str)] -> one user Content holding every function response."""
     return types.Content(role="user", parts=[

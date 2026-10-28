@@ -361,6 +361,8 @@ function browserSay(seg, gen) {
 async function sayAll(segs) {
   stopSpeaking(); const gen = ++speakGen;
   if (S.engine === 'off' || !segs.length) return;
+  // Sentence by sentence: the first sentence is voiced (and playing) while the rest are still being made.
+  segs = segs.flatMap(s => (s.text.match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || [s.text]).map(t => ({ who: s.who, text: t.trim() }))).filter(p => p.text);
   const loads = segs.map(s => S.engine === 'gemini' ? fetchVoice(s).catch(() => null) : Promise.resolve(null));
   S.speaking = true; setState('speaking');
   for (let i = 0; i < segs.length; i++) {
@@ -368,7 +370,7 @@ async function sayAll(segs) {
     if (segs[i].who === 'ultron') { S.flash = 1; ultronOverride(true); }
     if (buf) await playBuffer(buf, segs[i].who, gen);
     else { if (S.engine === 'gemini') $('#v-voice').textContent = 'BROWSER (fallback)'; await browserSay(segs[i], gen); }
-    if (segs[i].who === 'ultron') { S.flash = 0; if (S.mood !== 'ultron') ultronOverride(false); }
+    if (segs[i].who === 'ultron' && segs[i + 1]?.who !== 'ultron') { S.flash = 0; if (S.mood !== 'ultron') ultronOverride(false); }
   }
   if (gen === speakGen) { S.speaking = false; if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1800); setState(S.state === 'off' ? 'off' : 'idle'); if (S.always && !S.busy) startRec(false); }
 }

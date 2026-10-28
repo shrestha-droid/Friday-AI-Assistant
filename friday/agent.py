@@ -8,9 +8,9 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 
-from . import config, db, memory, permissions, personas, registry
+from . import config, db, fast, memory, permissions, personas, registry
 from .events import bus
-from .llm import LLMError, tool_results, user_text
+from .llm import LLMError, model_text, tool_results, user_text
 from .registry import BLOCKED, CONFIRM
 from .sessions import trim
 
@@ -66,6 +66,13 @@ class Agent:
             session.persona = persona if persona in personas.PERSONAS else session.persona
             turn = Turn(persona=session.persona, model=config.pick_model(model, config.DEFAULT_MODEL),
                         mark=len(session.contents))
+            quick = fast.answer(text, session.persona)
+            if quick:   # status questions: answered from the machine directly, no model round trip
+                session.contents += [user_text(text), model_text(quick)]
+                turn.used_model = "instant"
+                out = self._result(session, turn, "ok", quick)
+                out["steps"] = [{"tool": "instant", "tier": "safe", "ms": 0}]
+                return out
             turn.system = personas.build_system(turn.persona, memory.memory_block(text))
             session.contents.append(user_text(text))
             return await self._drive(session, turn, None)
