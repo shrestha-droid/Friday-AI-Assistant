@@ -126,7 +126,8 @@ class Agent:
                 session.contents.append(res.content)
                 if not res.calls:
                     trim(session)
-                    segs, mood = personas.split(res.text or "Done.", turn.persona)
+                    personal = any(s["tool"] in personas.PERSONAL_TOOLS for s in turn.steps)
+                    segs, mood = personas.split(res.text or "Done.", turn.persona, allow_ultron=not personal)
                     out = self._result(session, turn, "ok", segs[0]["text"], mood)
                     out["segments"] = segs
                     return out

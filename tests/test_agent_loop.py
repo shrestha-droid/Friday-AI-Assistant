@@ -79,6 +79,13 @@ def test_ultron_tag_sets_mood():
     assert r["mood"] == "ultron" and not r["response"].startswith("[")
 
 
+def test_ultron_is_silenced_after_reading_mail(monkeypatch):
+    monkeypatch.setitem(registry._TOOLS["read_latest_emails"].__dict__, "fn", lambda: "No unread email.")
+    a, _ = agent([[("read_latest_emails", {})], "Inbox is clear, boss.\n[ultron] How lonely."])
+    r = run(a.run_turn(Session("s"), "any mail?"))
+    assert [s["who"] for s in r["segments"]] == ["friday"] and r["mood"] == "normal"
+
+
 def test_loop_guard_stops_repeated_calls():
     a, _ = agent([[("_t_echo", {"x": "a"})]] * 5)
     r = run(a.run_turn(Session("s"), "go"))

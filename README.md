@@ -64,6 +64,18 @@ expressive, 4 to 5 seconds, free-tier quota runs out fast), then the browser voi
 Settings has "Character voices / Browser / Silent", and the LINK panel shows which engine spoke.
 Your name is respelled for speech only (`PRONOUNCE` in `config.py`): written Shrestha, said "Shresht".
 
+## The hologram and the house
+
+The centre is a 3D hologram (Three.js with bloom and a glitch pass): a point-cloud core in a geodesic shell, three orbits and a
+projector ring. It breathes with the voice. When Ultron cuts in, the whole interface glitches over to him: the palette goes red,
+the logo scrambles to U.L.T.R.O.N., and the core's points tear away into his spiked form, then everything snaps back.
+He only does this on work topics; any turn that touched email or calendar has him removed in code (`PERSONAL_TOOLS`).
+
+**HOUSE** (top right, or press H) swaps the core for the Mindspace idea from VisionQuest: the system drawn as a monochrome
+wireframe house. Engine room in the basement (system, terminal), Friday's study and JARVIS's library on the ground floor,
+EDITH's lookout upstairs with the big window. Rooms light up as their tools run. One banister never quite meets its post.
+Ultron is in the attic, behind a locked door that leaks red light and strains when he speaks.
+
 ## Configuration (`.env`, all optional)
 
 `DEFAULT_MODEL` (Gemini 3+ only), `BRIEFING_TIME=08:00`, `QUIET_HOURS=23:00-07:00`, `FRIDAY_TZ=Asia/Calcutta`,

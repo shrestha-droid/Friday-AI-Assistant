@@ -64,7 +64,7 @@ nav button[aria-pressed="true"]::after { content: ''; position: absolute; left: 
 #panels-btn { display: none; }
 
 /* ---------- main layout ---------- */
-main { position: relative; z-index: 10; display: grid; grid-template-columns: 290px minmax(0, 1fr) 360px; gap: 0; min-height: 0; }
+main { position: relative; display: grid;   /* no z-index: a stacking context here would stop #gl blending with the grid */ grid-template-columns: 290px minmax(0, 1fr) 360px; gap: 0; min-height: 0; }
 .col { min-height: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 26px; }
 .col.left { border-right: 1px solid var(--line); overflow-y: auto; }
 .col.right { border-left: 1px solid var(--line); }
@@ -108,7 +108,22 @@ main { position: relative; z-index: 10; display: grid; grid-template-columns: 29
 
 /* ---------- center: reticle + subtitles ---------- */
 .center { position: relative; display: grid; grid-template-rows: 1fr auto auto; min-height: 0; }
-#hud { position: absolute; inset: 0; width: 100%; height: 100%; }
+#hud, #gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+#gl { mix-blend-mode: screen; }   /* black = transparent: the hologram is pure light over the grid */
+.views { display: flex; border: 1px solid var(--line); }
+.views button { padding: 6px 12px; font: 500 10px var(--cond); letter-spacing: .3em; color: var(--faint); }
+.views button[aria-pressed="true"] { color: var(--bg); background: var(--a); }
+body.glitching header, body.glitching main { animation: uiglitch .46s steps(1) 1; }
+@keyframes uiglitch {
+  0%   { transform: translate(5px, 0);  clip-path: inset(0 0 62% 0);  filter: drop-shadow(-3px 0 rgba(255, 0, 40, .8)) drop-shadow(3px 0 rgba(0, 255, 255, .6)); }
+  14%  { transform: translate(-7px, 0); clip-path: inset(38% 0 22% 0); }
+  28%  { transform: translate(3px, 1px); clip-path: inset(8% 0 71% 0); }
+  42%  { transform: translate(-2px, 0); clip-path: inset(72% 0 0 0); }
+  56%  { transform: none; clip-path: inset(0); filter: none; }
+  70%  { transform: translate(2px, 0);  clip-path: inset(30% 0 48% 0); filter: drop-shadow(2px 0 rgba(255, 0, 40, .8)); }
+  84%  { transform: translate(-1px, 0); clip-path: inset(0); }
+  100% { transform: none; clip-path: none; filter: none; }
+}
 #hud-click { position: absolute; left: 50%; top: 44%; width: 34vmin; height: 34vmin; transform: translate(-50%, -50%); border-radius: 50%; }
 #subs { position: relative; z-index: 2; grid-row: 2; padding: 0 40px 18px; text-align: center; pointer-events: none; }
 #activity { min-height: 18px; font: 400 10px var(--mono); letter-spacing: .24em; color: var(--b); text-transform: uppercase; margin-bottom: 10px; }
@@ -184,13 +199,16 @@ select { border: 1px solid var(--line2); padding: 6px 8px; font: 400 11px var(--
 <div id="grid"></div><div id="vig"></div><div id="scan"></div><canvas id="grain" width="200" height="200"></canvas>
 
 <header>
-  <div class="logo" id="logo">F.R.I.D.A.Y.<small>MK·II // LOCAL</small></div>
+  <div class="logo" id="logo"><span id="logo-name">F.R.I.D.A.Y.</span><small>MK·II // LOCAL</small></div>
   <nav aria-label="Assistant">
     <button data-p="friday" aria-pressed="true">FRIDAY</button>
     <button data-p="jarvis" aria-pressed="false">JARVIS</button>
     <button data-p="edith" aria-pressed="false">EDITH</button>
   </nav>
   <div class="hright">
+    <div class="views" role="group" aria-label="View">
+      <button data-v="core" aria-pressed="true">CORE</button><button data-v="house" aria-pressed="false">HOUSE</button>
+    </div>
     <span id="status"><i></i><span>connecting</span></span>
     <span id="clock"></span>
     <button class="ibtn" id="panels-btn" aria-label="Panels"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
@@ -221,6 +239,7 @@ select { border: 1px solid var(--line2); padding: 6px 8px; font: 400 11px var(--
   </section>
 
   <section class="center">
+    <canvas id="gl" aria-hidden="true"></canvas>
     <canvas id="hud" aria-hidden="true"></canvas>
     <button id="hud-click" aria-label="Talk"></button>
     <div id="subs" aria-live="polite">
@@ -277,7 +296,9 @@ const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [..
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 const SID = sessionStorage.getItem('sid') || (() => { const v = crypto.randomUUID().slice(0, 12); sessionStorage.setItem('sid', v); return v; })();
 const S = { persona: store.get('persona', 'friday'), mood: 'normal', state: 'idle', engine: store.get('engine', 'gemini'),
-            always: false, ptt: false, listening: false, busy: false, speaking: false, confirm: null, flash: 0 };
+            always: false, ptt: false, listening: false, busy: false, speaking: false, confirm: null, flash: 0,
+            view: store.get('view', 'core'), override: false, level: 0, pulse: {}, glitchUntil: 0 };
+window.FRI = { S };   // shared with the 3D module
 const NAMES = { friday: 'F.R.I.D.A.Y.', jarvis: 'J.A.R.V.I.S.', edith: 'E.D.I.T.H.', ultron: 'ULTRON' };
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -345,10 +366,10 @@ async function sayAll(segs) {
   S.speaking = true; setState('speaking');
   for (let i = 0; i < segs.length; i++) {
     const buf = await loads[i]; if (gen !== speakGen) return;
-    if (segs[i].who === 'ultron') { S.flash = 1; if (S.mood !== 'ultron') glitch(); }
+    if (segs[i].who === 'ultron') { S.flash = 1; ultronOverride(true); }
     if (buf) await playBuffer(buf, segs[i].who, gen);
     else { if (S.engine === 'gemini') $('#v-voice').textContent = 'BROWSER (fallback)'; await browserSay(segs[i], gen); }
-    if (segs[i].who === 'ultron') S.flash = 0;
+    if (segs[i].who === 'ultron') { S.flash = 0; if (S.mood !== 'ultron') ultronOverride(false); }
   }
   if (gen === speakGen) { S.speaking = false; if (S.mood === 'ultron') setTimeout(() => !S.speaking && setMood('normal'), 1800); setState(S.state === 'off' ? 'off' : 'idle'); if (S.always && !S.busy) startRec(false); }
 }
@@ -363,9 +384,27 @@ const hex = s => { s = s.trim().replace('#', ''); return [parseInt(s.slice(0, 2)
 let colA = [103, 232, 249], colB = [255, 180, 84]; const RED = [255, 46, 69];
 const mixc = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-let ult = 0, energy = .2, spin = 0, glitchT = 0, born = performance.now(), lvl = new Float32Array(96);
+let ult = 0, energy = .2, spin = 0, glitchT = 0, born = performance.now(), hudA = 1;
 const ENERGY = { idle: .2, listening: .55, thinking: 1, speaking: .7, off: .05 };
-function glitch() { glitchT = performance.now() + 420; }
+function glitch(ms = 420) { glitchT = S.glitchUntil = performance.now() + ms; }
+
+// Ultron cutting in: the whole interface glitches over to him, then back.
+function scramble(el, to) {
+  const glyphs = '▓▒░<>/\\|#%&*+=?01', from = el.textContent, n = Math.max(from.length, to.length); let f = 0;
+  clearInterval(el._scr); el._scr = setInterval(() => {
+    f++; el.textContent = Array.from({ length: n }, (_, i) => i < f / 2 ? (to[i] || '') : glyphs[Math.random() * glyphs.length | 0]).join('');
+    if (f / 2 >= n) { clearInterval(el._scr); el.textContent = to; }
+  }, 22);
+}
+function ultronOverride(on) {
+  if (S.override === on) return; S.override = on;
+  document.body.classList.remove('glitching'); void document.body.offsetWidth; document.body.classList.add('glitching');
+  setTimeout(() => document.body.classList.remove('glitching'), 480);
+  glitch(on ? 520 : 380);
+  if (S.mood !== 'ultron') document.body.dataset.mood = on ? 'ultron' : 'normal';
+  scramble($('#logo-name'), on ? 'U.L.T.R.O.N.' : NAMES[S.persona]);
+  $('#status').lastChild.textContent = on ? 'override' : LABEL[S.state];
+}
 
 function ring(r, a, w = 1) { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.lineWidth = w; ctx.strokeStyle = a; ctx.stroke(); }
 function arc(r, s, e, a, w) { ctx.beginPath(); ctx.arc(0, 0, r, s, e); ctx.lineWidth = w; ctx.strokeStyle = a; ctx.stroke(); }
@@ -399,6 +438,7 @@ function draw(now) {
   const intro = Math.min(1, (now - born) / 900), ease = 1 - Math.pow(1 - intro, 3);
 
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+  hudA += ((S.view === 'house' ? .04 : 1) - hudA) * .08; ctx.globalAlpha = hudA;   // the house wants open space
   const cx = W / 2, cy = H * .44, R = Math.min(W * .42, H * .34) * (.85 + .15 * ease);
   ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
 
@@ -426,40 +466,16 @@ function draw(now) {
   // dashed ring
   ctx.save(); ctx.rotate(spin * .12); ctx.setLineDash([1.5, 6]); ring(R * .82, rgba(A, .45)); ctx.setLineDash([]); ctx.restore();
 
-  // the voice ring: real audio when speaking, a calm pulse otherwise
-  ctx.save(); ctx.rotate(spin * .05); ctx.beginPath();
-  const n = lvl.length;
-  for (let i = 0; i < n; i++) {
-    let v;
-    if (analyser && S.speaking) v = freq[(i < n / 2 ? i : n - i) % freq.length] / 255;
-    else v = (.12 + .1 * Math.sin(t * 2 + i * .5) * Math.sin(t * 1.3 + i * .21)) * (S.state === 'listening' ? 2.4 : 1) * (S.state === 'thinking' ? 1.6 : 1);
-    lvl[i] += (v - lvl[i]) * .25;
-    const a = i / n * Math.PI * 2, r0 = R * .68, r1 = r0 + 2 + lvl[i] * R * .16;
-    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
-  }
-  ctx.lineWidth = 2; ctx.strokeStyle = rgba(A, .75); ctx.stroke(); ctx.restore();
-
-  // scanning wedge while thinking
-  if (S.state === 'thinking' && ctx.createConicGradient) {
-    const g = ctx.createConicGradient(spin * 2.2, 0, 0); g.addColorStop(0, rgba(A, .32)); g.addColorStop(.12, rgba(A, 0)); g.addColorStop(1, rgba(A, 0));
-    ctx.beginPath(); ctx.arc(0, 0, R * .86, 0, Math.PI * 2); ctx.arc(0, 0, R * .2, 0, Math.PI * 2, true); ctx.fillStyle = g; ctx.fill();
-  }
-
-  // text ring + inner brackets
-  const label = (S.mood === 'ultron' ? 'ULTRON · THERE ARE NO STRINGS ON ME · ' : `${NAMES[S.persona]} · NEURAL CORE · ${S.state.toUpperCase()} · `).repeat(2);
-  textRing(label, R * .56, -spin * .08, A, .55 * ease);
-  ctx.save(); ctx.rotate(spin * .25);
-  for (let i = 0; i < 3; i++) { const s = i * Math.PI * 2 / 3; arc(R * .47, s + .15, s + 1.95, rgba(A, .7), 1.2); arc(R * .44, s + .15, s + .35, rgba(B, .8), 3); }
+  // text ring; the centre belongs to the 3D figure (hologram.js below)
+  const label = (ult > .5 ? 'ULTRON · THERE ARE NO STRINGS ON ME · ' : `${NAMES[S.persona]} · NEURAL CORE · ${S.state.toUpperCase()} · `).repeat(2);
+  textRing(label, R * .74, -spin * .08, A, .4 * ease);
   ctx.restore();
 
-  // core: hexagon (triangle for Ultron) + hot centre
-  const pulse = 1 + energy * .12 + Math.sin(t * 3) * .02;
-  if (ult > .5) poly(3, R * .22 * pulse, -spin, A, .9, 1.6); else poly(6, R * .22 * pulse, spin * .3, A, .8, 1.2);
-  poly(6, R * .27, -spin * .2, A, .2, 1);
-  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R * .2 * pulse);
-  g.addColorStop(0, rgba([255, 255, 255], .95)); g.addColorStop(.18, rgba(A, .85)); g.addColorStop(.6, rgba(A, .12)); g.addColorStop(1, rgba(A, 0));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * .2 * pulse, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+  // hand the 3D figure what it needs: colours, Ultron amount, voice level, where the reticle is
+  let lv = 0;
+  if (analyser && S.speaking) { let s = 0; for (let i = 2; i < 66; i++) s += freq[i]; lv = s / (64 * 255); }
+  S.level += (lv * 1.6 - S.level) * .3;
+  Object.assign(S, { rgbA: A, rgbB: B, ult, energy, R, cy, W, H });
 
   // corner readouts (real numbers only)
   ctx.globalCompositeOperation = 'source-over'; ctx.font = '400 10px "JetBrains Mono"'; ctx.fillStyle = rgba(A, .6);
@@ -489,9 +505,13 @@ function setState(s) {
 function setPersona(p) {
   S.persona = p; store.set('persona', p); document.body.dataset.persona = p;
   $$('nav button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
-  $('#logo').firstChild.textContent = NAMES[p];
+  if (!S.override) $('#logo-name').textContent = NAMES[p];
 }
-function setMood(m) { S.mood = m; document.body.dataset.mood = m === 'ultron' ? 'ultron' : 'normal'; if (m === 'ultron') glitch(); }
+function setMood(m) {
+  S.mood = m;
+  if (m === 'ultron') { document.body.dataset.mood = 'ultron'; ultronOverride(true); }
+  else { if (S.override) ultronOverride(false); document.body.dataset.mood = 'normal'; }
+}
 const clockStr = () => new Date().toLocaleTimeString('en-GB', { hour12: false });
 function logEntry(who, text) {
   const cls = who === 'you' ? 'you' : who === 'ultron' ? 'ultron' : who === 'sys' ? 'sys' : '';
@@ -607,9 +627,21 @@ $('#mic').onclick = toggleMic; $('#hud-click').onclick = toggleMic;
 $('#cmd').addEventListener('submit', e => { e.preventDefault(); const v = $('#input').value; $('#input').value = ''; send(v); });
 addEventListener('keydown', e => {
   if (e.code === 'Space' && !e.target.matches('input, select, button') && !e.repeat) { e.preventDefault(); toggleMic(); }
+  if (e.key.toLowerCase() === 'h' && !e.target.matches('input, select') && !e.metaKey && !e.ctrlKey) setView(S.view === 'house' ? 'core' : 'house');
   if (e.key === 'Escape') { if (S.confirm) resolveConfirm(false); else { stopSpeaking(); stopRec(); setState('idle'); $('#settings').hidden = true; document.body.classList.remove('show-panels'); } }
 });
 $$('nav button').forEach(b => b.onclick = () => setPersona(b.dataset.p));
+
+// Which room of the house lights up when a tool runs.
+const ROOM = { get_system_stats: 'engine', execute_terminal_command: 'engine', get_system_time: 'engine', focus_mode: 'engine',
+  remember: 'library', recall: 'library', list_memories: 'library', forget: 'library', brief_me: 'library',
+  analyze_screen: 'lookout', read_latest_emails: 'lookout', draft_visual_email: 'lookout', draft_calendar_event: 'lookout' };
+function setView(v, quiet) {
+  S.view = v; store.set('view', v);
+  $$('.views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (!quiet) glitch(300);
+}
+$$('.views button').forEach(b => b.onclick = () => setView(b.dataset.v));
 addEventListener('dragover', e => { e.preventDefault(); $('#drop').classList.add('on'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop').classList.remove('on'); });
 addEventListener('drop', async e => {
@@ -679,7 +711,7 @@ function connect() {
   es.onmessage = m => {
     const ev = JSON.parse(m.data);
     if (ev.kind === 'tool') {
-      if (ev.state === 'running') { $('#activity').textContent = '▸ ' + friendly(ev.name); logEntry('sys', friendly(ev.name)); }
+      if (ev.state === 'running') { $('#activity').textContent = '▸ ' + friendly(ev.name); logEntry('sys', friendly(ev.name)); S.pulse[ROOM[ev.name] || 'study'] = 1; }
       if (ev.name === 'analyze_screen') { const st = $('#status'); st.classList.toggle('eye', ev.state === 'running'); st.lastChild.textContent = ev.state === 'running' ? 'viewing screen' : LABEL[S.state]; }
     } else if (ev.kind === 'confirm') { if (!S.confirm || S.confirm.action_id !== ev.action_id) showConfirm(ev); }
     else if (ev.kind === 'reminder') { const t = ev.message.replace(/^Reminder: /, ''); toast('REMINDER', t, true); logEntry('sys', ev.message); sayAll([{ who: S.persona, text: ev.message }]); }
@@ -690,7 +722,7 @@ function connect() {
 
 /* ================= boot: straight to ready ================= */
 (async () => {
-  setPersona(S.persona); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
+  setPersona(S.persona); setView(S.view, true); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
   $('#v-voice').textContent = $('#engine').selectedOptions[0].text.toUpperCase();
   const tick = () => $('#clock').textContent = clockStr(); tick(); setInterval(tick, 1000);
   try {
@@ -702,6 +734,214 @@ function connect() {
     setState('idle'); connect(); poll(); setInterval(poll, 4000);
   } catch { $('#status').lastChild.textContent = 'offline'; show([{ who: S.persona, text: 'The core is not answering. Start friday_server.py.' }], 'bad'); }
 })();
+</script>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+/* ================= the hologram: a 3D core, Ultron's form, and the house ================= */
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const S = window.FRI.S, canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setClearColor(0x000000, 1);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 1, .1, 100);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .9, .55, .02); composer.addPass(bloom);
+const glitch = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uAmt: { value: 0 }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uAmt, uTime; varying vec2 vUv;
+    float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 uv = vUv; float r = rnd(vec2(floor(uv.y * 26.0), floor(uTime * 20.0)));
+      uv.x += (r > .7 ? (r - .85) * .22 : 0.0) * uAmt;               // torn horizontal bands
+      float s = .014 * uAmt; vec4 c = texture2D(tDiffuse, uv);
+      c.r = texture2D(tDiffuse, uv + vec2(s, 0.)).r; c.b = texture2D(tDiffuse, uv - vec2(s, 0.)).b;   // RGB split
+      c.rgb *= 1.0 - .3 * uAmt * step(.5, fract(uv.y * 200.0));      // scanlines
+      gl_FragColor = c; }`
+});
+composer.addPass(glitch); composer.addPass(new OutputPass());
+
+const fade = { core: [], house: [] };
+const add = (m, group, base, tint) => { m.userData = { base, tint }; fade[group].push(m); return m; };
+const lineMat = (g, o, tint = 'A') => add(new THREE.LineBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), g, o, tint);
+const fillMat = (g, o, tint = 'A') => add(new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), g, o, tint);
+const circle = (r, n = 160) => new THREE.BufferGeometry().setFromPoints(Array.from({ length: n + 1 }, (_, i) => { const a = i / n * Math.PI * 2; return new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r); }));
+const segs = list => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(list.flat(), 3)); return g; };
+
+/* ---------- CORE: a geodesic shell, a breathing point cloud, orbits, a projector ---------- */
+const core = new THREE.Group(); scene.add(core);
+const N = 2600, sph = new Float32Array(N * 3), ulp = new Float32Array(N * 3), seed = new Float32Array(N), gold = Math.PI * (3 - Math.sqrt(5));
+for (let i = 0; i < N; i++) { const y = 1 - i / (N - 1) * 2, r = Math.sqrt(1 - y * y), t = i * gold; sph.set([Math.cos(t) * r * .82, y * .82, Math.sin(t) * r * .82], i * 3); seed[i] = Math.random(); }
+// Ultron's form: an icosahedron with every face pulled out into a spike. Points are sampled on its faces.
+const ico = new THREE.IcosahedronGeometry(.5, 0).attributes.position, tris = [];
+for (let f = 0; f < ico.count; f += 3) {
+  const [a, b, c] = [0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(ico, f + k));
+  const apex = a.clone().add(b).add(c).normalize().multiplyScalar(1.3);
+  tris.push([a, b, apex], [b, c, apex], [c, a, apex]);
+}
+for (let i = 0; i < N; i++) {
+  const [a, b, c] = tris[Math.random() * tris.length | 0]; let u = Math.random(), v = Math.random(); if (u + v > 1) { u = 1 - u; v = 1 - v; }
+  const p = a.clone().addScaledVector(b.clone().sub(a), u).addScaledVector(c.clone().sub(a), v); ulp.set([p.x, p.y, p.z], i * 3);
+}
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(sph, 3)); pg.setAttribute('aUlt', new THREE.BufferAttribute(ulp, 3)); pg.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+const pu = { uTime: { value: 0 }, uLevel: { value: 0 }, uMorph: { value: 0 }, uSize: { value: 3 }, uColor: { value: new THREE.Color() }, uFade: { value: 1 } };
+const cloud = new THREE.Points(pg, new THREE.ShaderMaterial({
+  uniforms: pu, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `attribute vec3 aUlt; attribute float aSeed; uniform float uTime, uLevel, uMorph, uSize; varying float vA;
+    void main(){
+      float m = smoothstep(0., 1., clamp(uMorph * 1.4 - aSeed * .4, 0., 1.));   // points leave in waves, not all at once
+      vec3 p = mix(position, aUlt, m);
+      float w = sin(aSeed * 50. + uTime * 3.) * .5 + .5;
+      p *= 1. + uLevel * .22 * w + .012 * sin(uTime * 1.4 + aSeed * 7.);
+      vec4 mv = modelViewMatrix * vec4(p, 1.);
+      gl_PointSize = uSize * (.5 + w) * (4. / -mv.z); vA = .3 + .7 * w;
+      gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform vec3 uColor; uniform float uFade; varying float vA;
+    void main(){ float d = length(gl_PointCoord - .5); if (d > .5) discard; gl_FragColor = vec4(uColor, smoothstep(.5, 0., d) * vA * uFade); }`
+}));
+core.add(cloud);
+const shell = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1, 2)), lineMat('core', .2)); core.add(shell);
+const tl = []; tris.forEach(([a, b, c]) => tl.push([a.x, a.y, a.z, b.x, b.y, b.z], [b.x, b.y, b.z, c.x, c.y, c.z], [c.x, c.y, c.z, a.x, a.y, a.z]));
+const spikes = new THREE.LineSegments(segs(tl), lineMat('core', 0, 'U')); core.add(spikes);
+const orbits = [[1.32, .35, .2, 'A'], [1.52, -.55, 1.1, 'B'], [1.72, 1.25, -.6, 'A']].map(([r, x, z, tint]) => {
+  const g = new THREE.Group(); g.rotation.set(x, 0, z);
+  g.add(new THREE.Line(circle(r), lineMat('core', .38, tint)));
+  const sat = new THREE.Mesh(new THREE.SphereGeometry(.028, 10, 10), fillMat('core', 1, tint)); sat.position.x = r; g.add(sat);
+  core.add(g); return g;
+});
+const scan = new THREE.Line(circle(1), lineMat('core', .55, 'B')); core.add(scan);
+const base = new THREE.Group(); base.position.y = -1.55; core.add(base);
+[.35, .7, 1.05, 1.4].forEach((r, i) => base.add(new THREE.Line(circle(r), lineMat('core', i === 3 ? .4 : .16))));
+base.add(new THREE.LineSegments(segs(Array.from({ length: 72 }, (_, i) => { const a = i / 72 * Math.PI * 2, r0 = i % 6 ? 1.33 : 1.25; return [Math.cos(a) * r0, 0, Math.sin(a) * r0, Math.cos(a) * 1.4, 0, Math.sin(a) * 1.4]; })), lineMat('core', .35)));
+const dustN = 380, dust = new Float32Array(dustN * 3);
+for (let i = 0; i < dustN; i++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 2.2; dust.set([Math.cos(a) * r, Math.random() * 3.2 - 1.6, Math.sin(a) * r], i * 3); }
+const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dust, 3));
+const dustPts = new THREE.Points(dg, add(new THREE.PointsMaterial({ size: .018, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), 'core', .5, 'A'));
+core.add(dustPts);
+
+/* ---------- HOUSE: the mind as a house. Monochrome, one deliberate flaw, and something in the attic. ---------- */
+const house = new THREE.Group(); scene.add(house);
+const L = [], dashed = [], red = [];
+function box(x0, y0, z0, x1, y1, z1, out = L) {
+  const P = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], T = P.map(p => [p[0], y1, p[2]]);
+  for (let i = 0; i < 4; i++) out.push([...P[i], ...P[(i + 1) % 4]], [...T[i], ...T[(i + 1) % 4]], [...P[i], ...T[i]]);
+}
+box(-2, -1, -1.5, 2, 0, 1.5, dashed);                 // engine room, below ground
+box(-2, 0, -1.5, 2, 1, 1.5); box(-2, 1, -1.5, 2, 2, 1.5);
+L.push([.2, 1, -1.5, .2, 1, 1.5], [.2, 0, -1.5, .2, 1, -1.5], [.2, 0, 1.5, .2, 1, 1.5], [.2, 0, -.25, .2, .78, -.25], [.2, .78, -.25, .2, .78, .3], [.2, .78, .3, .2, 0, .3]);  // study | library wall with a door
+L.push([-.5, 1, -1.5, -.5, 2, -1.5], [-.5, 1, 1.5, -.5, 2, 1.5], [-.5, 2, -1.5, -.5, 2, 1.5]);                     // lookout wall
+L.push([-1.75, 1.25, 1.5, -.75, 1.25, 1.5], [-.75, 1.25, 1.5, -.75, 1.85, 1.5], [-.75, 1.85, 1.5, -1.75, 1.85, 1.5], [-1.75, 1.85, 1.5, -1.75, 1.25, 1.5], [-1.25, 1.25, 1.5, -1.25, 1.85, 1.5], [-1.75, 1.55, 1.5, -.75, 1.55, 1.5]);  // lookout window
+// roof and attic
+L.push([-2, 2.9, 0, 2, 2.9, 0]);
+for (const x of [-2, -1, 0, 1, 2]) L.push([x, 2, -1.5, x, 2.9, 0], [x, 2.9, 0, x, 2, 1.5]);
+// stairs from the library up to the first floor
+for (let k = 0; k < 8; k++) {
+  const y0 = k / 8, y1 = (k + 1) / 8, z0 = 1.3 - k * .2, z1 = z0 - .2;
+  for (const x of [1.25, 1.85]) L.push([x, y0, z0, x, y1, z0], [x, y1, z0, x, y1, z1]);
+  L.push([1.25, y1, z0, 1.85, y1, z0]);
+}
+L.push([1.22, 0, 1.3, 1.22, .48, 1.3], [1.22, 1, -.3, 1.22, 1.42, -.3]);   // newel posts
+L.push([1.18, .5, 1.2, 1.18, 1.34, -.12]);                                // the banister: almost right, never quite meets the post
+// grid on each floor
+for (const y of [0, 1, 2]) { for (let x = -2; x <= 2.01; x += .5) dashed.push([x, y, -1.5, x, y, 1.5]); for (let z = -1.5; z <= 1.51; z += .5) dashed.push([-2, y, z, 2, y, z]); }
+// the attic door, on the gable end
+red.push([2, 2.04, -.22, 2, 2.56, -.22], [2, 2.56, -.22, 2, 2.56, .22], [2, 2.56, .22, 2, 2.04, .22], [2, 2.04, .22, 2, 2.04, -.22]);
+house.add(new THREE.LineSegments(segs(L), lineMat('house', .5, 'H')));
+const dl = new THREE.LineSegments(segs(dashed), lineMat('house', .12, 'H')); house.add(dl);
+const door = new THREE.LineSegments(segs(red), lineMat('house', .9, 'U')); house.add(door);
+const doorGlow = new THREE.Mesh(new THREE.PlaneGeometry(.44, .5), fillMat('house', .1, 'U')); doorGlow.position.set(2.003, 2.3, 0); doorGlow.rotation.y = Math.PI / 2; house.add(doorGlow);
+const atticCore = new THREE.Mesh(new THREE.OctahedronGeometry(.16), fillMat('house', .25, 'U')); atticCore.position.set(.9, 2.32, 0); house.add(atticCore);
+const ROOMS = { engine: [-2, -1, -1.5, 2, 0, 1.5], study: [-2, 0, -1.5, .2, 1, 1.5], library: [.2, 0, -1.5, 2, 1, 1.5], lookout: [-2, 1, -1.5, -.5, 2, 1.5] };
+const fills = {};
+for (const [k, [x0, y0, z0, x1, y1, z1]] of Object.entries(ROOMS)) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 - .04, y1 - y0 - .04, z1 - z0 - .04), fillMat('house', 0, 'A'));
+  m.material.side = THREE.BackSide;   // only the inside walls catch the light
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); house.add(m); fills[k] = m;
+}
+function label(text, x, y, z, tint = 'H') {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 64; const g = c.getContext('2d');
+  g.font = '500 30px "JetBrains Mono", monospace'; g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(text, 6, 32);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(add(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }), 'house', .85, tint));
+  s.scale.set(1.6, .2, 1); s.position.set(x + .8, y, z); s.center.set(0, .5); house.add(s);
+}
+label('ENGINE ROOM', -1.9, -.85, 1.55); label('STUDY · FRIDAY', -1.9, .14, 1.55); label('LIBRARY · JARVIS', .3, .14, 1.55);
+label('LOOKOUT · EDITH', -1.9, 1.14, 1.55); label('ATTIC · LOCKED', -.4, 2.15, 1.0, 'U');
+house.scale.setScalar(.52); house.position.y = -.35;
+
+/* ---------- frame loop ---------- */
+const cA = new THREE.Color(), cB = new THREE.Color(), cH = new THREE.Color(), cU = new THREE.Color(), white = new THREE.Color(1, 1, 1);
+const PROOM = { friday: 'study', jarvis: 'library', edith: 'lookout' };
+const look = new THREE.Vector3(), lookT = new THREE.Vector3(), camT = new THREE.Vector3();
+let fCore = S.view === 'house' ? 0 : 1, fHouse = 1 - fCore, morph = 0, gAmt = 0, mx = 0, my = 0;
+addEventListener('pointermove', e => { mx = e.clientX / innerWidth - .5; my = e.clientY / innerHeight - .5; });
+function fit() {
+  const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); composer.setSize(w, h); bloom.resolution.set(w / 2, h / 2);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(fit).observe(canvas); fit();
+const toRGB = (c, a) => c.setRGB(a[0] / 255, a[1] / 255, a[2] / 255, THREE.SRGBColorSpace);
+camera.position.set(0, .9, 6);
+
+renderer.setAnimationLoop(now => {
+  const t = now / 1000, ult = S.ult || 0;
+  toRGB(cA, S.rgbA || [103, 232, 249]); toRGB(cB, S.rgbB || [255, 180, 84]); cU.setRGB(1, .12, .2);
+  cH.copy(cA).lerp(white, .5 * (1 - ult));                   // the house is near-monochrome until Ultron stirs
+
+  const house3 = S.view === 'house';
+  fCore += ((house3 ? 0 : 1) - fCore) * .06; fHouse += ((house3 ? 1 : 0) - fHouse) * .06;
+  core.visible = fCore > .01; house.visible = fHouse > .01;
+  morph += (Math.min(1, Math.max(0, (ult - .3) / .5)) - morph) * .05;
+
+  // size the core to sit inside the 2D reticle
+  const dist = camera.position.distanceTo(look), unit = 2 * dist * Math.tan(THREE.MathUtils.degToRad(19)) / (S.H || canvas.clientHeight || 1);
+  const R = S.R || 200; core.scale.setScalar(R * .82 * unit / 1.72);
+  core.position.y = ((S.H || 0) * .5 - (S.cy || 0)) * unit;
+  core.rotation.y += .003 + (S.energy || .2) * .006 + morph * .02;
+  orbits.forEach((o, i) => { o.rotation.y += (i % 2 ? -1 : 1) * (.004 + i * .002 + morph * .03); });
+  const sy = Math.sin(t * .7) * .9; scan.position.y = sy; scan.scale.setScalar(Math.sqrt(Math.max(0, 1 - sy * sy)));
+  const dp = dg.attributes.position; for (let i = 0; i < dustN; i++) { let y = dp.getY(i) + .002; if (y > 1.6) y = -1.6; dp.setY(i, y); } dp.needsUpdate = true;
+  pu.uTime.value = t; pu.uLevel.value = S.level || (S.state === 'listening' ? .25 + .15 * Math.sin(t * 5) : 0);
+  pu.uMorph.value = morph; pu.uSize.value = 3.2 * renderer.getPixelRatio(); pu.uColor.value.copy(cA); pu.uFade.value = fCore;
+
+  // house: camera orbits slowly; Ultron leans on the attic door
+  for (const [k, m] of Object.entries(fills)) {
+    S.pulse[k] = (S.pulse[k] || 0) * .975;
+    m.material.userData.base = .006 + (PROOM[S.persona] === k ? .018 : 0) + S.pulse[k] * .1;   // a lit room, not a lit box
+  }
+  doorGlow.material.userData.base = .08 + ult * .7 + (Math.random() < .03 ? .1 : 0);
+  atticCore.material.userData.base = .25 + ult * .75; atticCore.rotation.y += .01 + ult * .08; atticCore.rotation.x += .004;
+  door.position.x = ult > .3 ? (Math.random() - .5) * .03 * ult : 0;
+
+  for (const [group, f] of [['core', fCore], ['house', fHouse]]) for (const m of fade[group]) {
+    const { base, tint } = m.userData;
+    m.opacity = (tint === 'U' && group === 'core' ? base + morph * .9 : base) * f * (tint === 'A' && group === 'core' ? 1 - morph * .7 : 1);
+    m.color.copy(tint === 'B' ? cB : tint === 'U' ? cU : tint === 'H' ? cH : cA);
+  }
+  shell.material.opacity = .2 * fCore * (1 - morph);
+
+  if (house3) { const a = t * .05 + mx * .8; camT.set(Math.sin(a) * 6.4, 2.6 - my * 1.5, Math.cos(a) * 6.4); lookT.set(0, .15, 0); }
+  else { camT.set(mx * .6, .9 - my * .4, 6); lookT.set(0, 0, 0); }
+  camera.position.lerp(camT, .04); look.lerp(lookT, .06); camera.lookAt(look);
+
+  // glitch: on demand (view switch, Ultron cutting in) plus small tears while he has the floor
+  gAmt = Math.max(gAmt * .9, now < S.glitchUntil ? 1 : 0, ult > .5 && Math.random() < .05 ? .55 : 0);
+  glitch.uniforms.uAmt.value = gAmt; glitch.uniforms.uTime.value = t;
+  bloom.strength = .85 + (S.energy || .2) * .35 + ult * .4;
+  composer.render();
+});
 </script>
 </body>
 </html>

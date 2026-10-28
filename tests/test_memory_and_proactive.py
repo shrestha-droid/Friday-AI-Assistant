@@ -53,6 +53,13 @@ def test_ultron_takeover_and_plain_reply():
     assert personas.split("Plain.", "jarvis") == ([{"who": "jarvis", "text": "Plain."}], "normal")
 
 
+def test_no_ultron_on_personal_turns():
+    segs, mood = personas.split("Two unread emails.\n[ultron] Love letters?", "friday", allow_ultron=False)
+    assert segs == [{"who": "friday", "text": "Two unread emails."}] and mood == "normal"
+    segs, mood = personas.split("[ultron] No.", "friday", allow_ultron=False)
+    assert segs == [{"who": "friday", "text": "No."}] and mood == "normal"
+
+
 def test_aside_rule_is_decided_in_code():
     assert personas.ASIDE_ON in personas.build_system("friday", aside=True)
     assert personas.ASIDE_OFF in personas.build_system("friday", aside=False)

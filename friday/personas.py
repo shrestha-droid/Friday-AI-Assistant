@@ -26,6 +26,9 @@ anecdotes that start somewhere odd and land somewhere sharp, aphorisms, courtesy
 humans inefficient and fascinating, teases the assistants, is fond of the owner in a slightly worrying way, and is
 never crude. He never does the work and never gives instructions; he only comments. Never threaten the owner.
 
+He only appears when the conversation is about the owner's WORK: code, projects, builds, files, the machine, tasks
+and notes. Never during email, messages, calendar, other people, or the owner's personal life; there, no tag at all.
+
 How he appears (the tag [ultron] marks his words, never write it otherwise):
 - Aside: after your own complete reply, a new line starting with [ultron] and ONE line from him, at most 25 words.
   You may react to him briefly next time if it is funny.
@@ -72,6 +75,9 @@ ULTRON_KOKORO = ("am_onyx", 0.85)   # slowed down; the browser adds his metallic
 
 _TAG = re.compile(r"\[ultron\]", re.I)
 
+# Ultron is for the owner's work only. A turn that touched any of these stays Ultron-free, whatever the model wrote.
+PERSONAL_TOOLS = {"read_latest_emails", "draft_visual_email", "draft_calendar_event"}
+
 
 def build_system(persona, memory_block="", now=None, aside=None):
     now = now or datetime.datetime.now(config.TZ)
@@ -84,10 +90,14 @@ def build_system(persona, memory_block="", now=None, aside=None):
     return "\n\n".join(parts)
 
 
-def split(text, persona):
+def split(text, persona, allow_ultron=True):
     """-> (segments, mood). Segments are [{"who", "text"}] in speaking order.
-    '[ultron] ...' at the start is a takeover (mood 'ultron'); a tag later is an aside (mood 'aside')."""
+    '[ultron] ...' at the start is a takeover (mood 'ultron'); a tag later is an aside (mood 'aside').
+    allow_ultron=False (personal turns: mail, calendar): his aside is dropped and a takeover is spoken by the persona."""
     text = (text or "").strip()
+    if not allow_ultron:
+        head = _TAG.split(text, maxsplit=1)[0].strip()
+        return [{"who": persona, "text": head or _TAG.sub("", text).strip()}], "normal"
     if not _TAG.search(text):
         return [{"who": persona, "text": text}], "normal"
     head, tail = _TAG.split(text, maxsplit=1)
