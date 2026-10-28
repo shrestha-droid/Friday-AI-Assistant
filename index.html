@@ -500,7 +500,7 @@ requestAnimationFrame(draw);
 const LABEL = { idle: 'standing by', listening: 'listening', thinking: 'processing', speaking: 'speaking', off: 'asleep' };
 function setState(s) {
   S.state = s; const st = $('#status');
-  if (!st.classList.contains('eye')) st.lastChild.textContent = LABEL[s];
+  if (!st.classList.contains('eye')) st.lastChild.textContent = s === 'idle' && window.HF?.on ? 'hands-free' : LABEL[s];
   st.classList.toggle('busy', s === 'thinking' || s === 'listening');
   $('#mic').setAttribute('aria-pressed', String(s === 'listening'));
 }
@@ -566,7 +566,7 @@ async function send(text) {
   if (switchBrain(text)) return;
   stopSpeaking(); S.busy = true; setMood('normal'); setState('thinking');
   logEntry('you', text); $('#line').className = 'dim'; $('#line').textContent = text; $('#uline').classList.remove('on'); $('#meta').textContent = '';
-  try { handle(await api('/api/command', { text, model: $('#model').value || undefined, session_id: SID, persona: S.persona })); }
+  try { handle(await api('/api/command', { text, model: $('#model').value || undefined, session_id: SID, persona: S.persona, to_ultron: TO_ULTRON.test(text) })); }
   catch (e) { show([{ who: S.persona, text: e.message === 'auth' ? 'Session expired. Reload the page.' : 'Link to the core is down. Is the server running?' }], 'bad'); setState('idle'); }
   finally { S.busy = false; $('#activity').textContent = ''; }
 }
@@ -604,7 +604,8 @@ $('#approve').onclick = () => resolveConfirm(true); $('#deny').onclick = () => r
 /* ================= listening ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
-const WAKE = { friday: /\bfriday\b/i, jarvis: /\bjarvis\b/i, edith: /\b(edith|edit)\b/i };
+const TO_ULTRON = /^\W*(?:hey\s+|ok\s+)?ultron\b|\bultron\W*$/i;   // speaking to him by name
+const WAKE = { friday: /\bfriday\b/i, jarvis: /\bjarvis\b/i, edith: /\bedith\b/i };   // not "edit": that word is everywhere
 if (SR) {
   rec = new SR(); rec.lang = 'en-US'; rec.interimResults = true;
   rec.onresult = e => { const r = e.results[e.results.length - 1]; $('#line').className = 'dim'; $('#line').textContent = r[0].transcript; if (r.isFinal) heard(r[0].transcript.trim()); };
@@ -677,7 +678,7 @@ function heard(text) {
     if (/\b(no|nope|deny|cancel|stop|don't)\b/i.test(text)) return resolveConfirm(false);
   }
   if (/\b(good\s?night|go to sleep)\b/i.test(text)) { sayAll([{ who: S.persona, text: 'Goodnight.' }]); stopRec(); S.always = false; setSwitch(false); setState('off'); return; }
-  if (S.ptt) return send(text);
+  if (S.ptt || TO_ULTRON.test(text)) return send(text);
   for (const [p, re] of Object.entries(WAKE)) if (re.test(text)) {
     if (p !== S.persona) setPersona(p);
     const rest = text.replace(re, '').replace(/^[\s,.:;!?-]+/, '');
@@ -726,7 +727,7 @@ function applyAlways() { if (S.sttServer || !SR) handsFree(S.always); else S.alw
 /* Hands-free where the browser has no speech service (Brave): the mic stays open, each phrase you say is
    transcribed locally (Whisper) and acted on only if it names Friday / JARVIS / EDITH, or comes within a few
    seconds of her last answer. Nothing is sent while she is talking, thinking, or nobody is speaking. */
-const HF = { on: false };
+const HF = window.HF = { on: false };
 let followUntil = 0;
 async function handsFree(on) {
   if (!on) { if (HF.on) { HF.on = false; HF.stop(); } return; }
@@ -741,7 +742,7 @@ async function handsFree(on) {
     if (!HF.on || S.speaking || S.busy || REC.on) { chunks = []; speech = false; return; }   // never hear herself
     const d = e.inputBuffer.getChannelData(0), ms = d.length / ctx.sampleRate * 1000;
     let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
-    const rms = Math.sqrt(s / d.length), loud = rms > Math.max(.015, floor * 2.5);
+    const rms = Math.sqrt(s / d.length), loud = rms > Math.max(.01, floor * 2.2);   // same sensitivity as TALK
     if (!speech) floor = floor * .97 + rms * .03;                    // follow the room's noise while it is quiet
     chunks.push(new Float32Array(d));
     if (!speech && !loud) { if (chunks.length > 3) chunks.shift(); return; }   // keep ~0.25 s of pre-roll
@@ -754,8 +755,8 @@ async function handsFree(on) {
     }
   };
   src.connect(proc); proc.connect(ctx.destination);
-  HF.stop = () => { proc.disconnect(); src.disconnect(); stream.getTracks().forEach(t => t.stop()); S.micLevel = 0; };
-  $('#line').className = 'dim'; $('#line').textContent = 'Listening for "Friday"…';
+  HF.stop = () => { proc.disconnect(); src.disconnect(); stream.getTracks().forEach(t => t.stop()); S.micLevel = 0; setState(S.state); };
+  $('#line').className = 'dim'; $('#line').textContent = 'Listening for "Friday"…'; setState(S.state);
 }
 async function hfSend(chunks, rate) {
   try {
@@ -763,7 +764,10 @@ async function hfSend(chunks, rate) {
     const t = ((await r.json()).text || '').trim();
     if (!t || S.busy) return;
     S.ptt = performance.now() < followUntil;   // a follow-up right after her answer needs no name
-    heard(t);                                  // otherwise heard() acts only if a wake word is in it
+    if (!S.ptt && !TO_ULTRON.test(t) && !Object.values(WAKE).some(re => re.test(t))) {   // heard you, no name: say so instead of silence
+      $('#line').className = 'dim'; $('#line').textContent = `Heard: "${t}" (say "Friday" first)`; return;
+    }
+    heard(t);
   } catch {}
 }
 $('#brief').onclick = async () => {
@@ -833,7 +837,7 @@ function connect() {
 (async () => {
   setPersona(S.persona); setView(S.view, true); $('#v-sid').textContent = SID.slice(0, 8).toUpperCase();
   if (navigator.brave || !SR) S.sttServer = true;   // Brave exposes the API but its service is blocked: record here instead
-  if (store.get('always', 'off') === 'on') {        // hands-free stays on between visits; browsers need one click before the mic runs
+  if (store.get('always', 'on') === 'on') {         // hands-free is the default; browsers need one click before the mic runs
     S.always = true; setSwitch(true);
     const go = () => { removeEventListener('pointerdown', go); removeEventListener('keydown', go); applyAlways(); };
     addEventListener('pointerdown', go); addEventListener('keydown', go);

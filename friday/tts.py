@@ -23,11 +23,20 @@ def _load():
     return _engine
 
 
+def _style(k, voice):
+    """'af_heart' or a blend like 'af_heart:0.6+bf_isabella:0.4' (Kokoro voices are vectors, so they mix)."""
+    if "+" not in voice:
+        return voice
+    parts = [p.split(":") for p in voice.split("+")]
+    return sum(float(w) * k.get_voice_style(v) for v, w in parts)
+
+
 def speak(text, voice, speed):
     """Blocking: text -> WAV bytes. Call it from a worker thread."""
     import numpy as np
     with _lock:
-        samples, rate = _load().create(text, voice=voice, speed=speed, lang="en-gb" if voice[0] == "b" else "en-us")
+        k = _load()
+        samples, rate = k.create(text, voice=_style(k, voice), speed=speed, lang="en-gb" if voice[0] == "b" else "en-us")
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)

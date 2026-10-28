@@ -48,7 +48,7 @@ PERSONAS = {
 Irish. Call the owner "boss" now and then. Efficient first, charming second. You tolerate Ultron like a sister
 tolerates a bad cousin.""",
         "voice": ("Despina", "Speak briskly and warmly with a light Irish lilt, wry and a little cheeky"),
-        "kokoro": ("bf_emma", 1.05),
+        "kokoro": ("af_heart", 1.08),   # Kokoro's warmest, most expressive voice; blends work too, e.g. "af_heart:0.6+bf_isabella:0.4"
     },
     "jarvis": {
         "label": "J.A.R.V.I.S.",
@@ -81,11 +81,15 @@ _NOT_BOSS = re.compile(r",\s*boss\b|\bboss,\s*", re.I)   # Ultron never says it,
 PERSONAL_TOOLS = {"read_latest_emails", "draft_visual_email", "draft_calendar_event"}
 
 
-def build_system(persona, memory_block="", now=None, aside=None):
+TO_ULTRON = ("This turn: the owner is speaking to Ultron directly, by name. The whole reply is his: start with [ultron] "
+             "and answer in his voice, still carrying the real answer.")
+
+
+def build_system(persona, memory_block="", now=None, aside=None, to_ultron=False):
     now = now or datetime.datetime.now(config.TZ)
     aside = random.random() < config.ULTRON_ASIDE_RATE if aside is None else aside
     p = PERSONAS.get(persona, PERSONAS["friday"])
-    parts = [p["prompt"], BASE, ULTRON, ASIDE_ON if aside else ASIDE_OFF,
+    parts = [p["prompt"], BASE, ULTRON, TO_ULTRON if to_ultron else ASIDE_ON if aside else ASIDE_OFF,
              f"Local time: {now.strftime('%A %d %B %Y, %H:%M')} ({config.TZ.key})."]
     if memory_block:
         parts.append(memory_block)

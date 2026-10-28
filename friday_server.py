@@ -127,6 +127,7 @@ class CommandRequest(BaseModel):
     model: str | None = None
     session_id: str | None = None
     persona: str | None = None
+    to_ultron: bool = False
 
 
 class ConfirmRequest(BaseModel):
@@ -190,7 +191,7 @@ async def command(req: CommandRequest):
     if len(text) > 4000:
         raise HTTPException(400, "Command text exceeds 4000 characters.")
     logger.info("Processing command length=%d persona=%s", len(text), req.persona)
-    return await agent.run_turn(_session(req.session_id), text, req.model, req.persona)
+    return await agent.run_turn(_session(req.session_id), text, req.model, req.persona, req.to_ultron)
 
 
 @app.post("/api/confirm", dependencies=[Depends(guard)])

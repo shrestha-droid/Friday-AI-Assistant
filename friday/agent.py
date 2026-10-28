@@ -28,6 +28,7 @@ class Turn:
     persona: str
     model: str
     mark: int                      # history length before this turn, so we can roll back
+    to_ultron: bool = False        # the owner addressed Ultron by name
     system: str = ""
     t0: float = field(default_factory=time.monotonic)
     steps: list = field(default_factory=list)
@@ -60,7 +61,7 @@ class Agent:
         self.good = (None, 0)   # (model that last answered, until when to try it first)
 
     # ---------- public ----------
-    async def run_turn(self, session, text, model=None, persona=None):
+    async def run_turn(self, session, text, model=None, persona=None, to_ultron=False):
         async with session.lock:
             self._drop_pending(session)
             session.persona = persona if persona in personas.PERSONAS else session.persona
@@ -76,7 +77,8 @@ class Agent:
                 out = self._result(session, turn, "ok", spoken)
                 out["steps"] = [{"tool": tool_name, "tier": "safe", "ms": 0}]
                 return out
-            turn.system = personas.build_system(turn.persona, memory.memory_block(text))
+            turn.to_ultron = to_ultron
+            turn.system = personas.build_system(turn.persona, memory.memory_block(text), to_ultron=to_ultron)
             session.contents.append(user_text(text))
             return await self._drive(session, turn, None)
 
@@ -139,6 +141,8 @@ class Agent:
                     trim(session)
                     personal = any(s["tool"] in personas.PERSONAL_TOOLS for s in turn.steps)
                     segs, mood = personas.split(res.text or "Done.", turn.persona, allow_ultron=not personal)
+                    if turn.to_ultron and not personal:   # spoken to by name: he answers, whatever the model tagged
+                        segs, mood = [{"who": "ultron", "text": " ".join(x["text"] for x in segs)}], "ultron"
                     out = self._result(session, turn, "ok", segs[0]["text"], mood)
                     out["segments"] = segs
                     return out
