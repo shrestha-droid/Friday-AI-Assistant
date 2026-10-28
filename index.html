@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --core: #ff2a2a;         /* crimson redish high-tech core — idle/standby */
+            --core: #ff2a2a;
             --core-glow: rgba(255, 42, 42, 0.75);
-            --signal: #ff9900;       /* fiery orange gold — thinking/processing */
+            --signal: #ff9900;
             --signal-glow: rgba(255, 153, 0, 0.75);
             --bg-0: #0d0103;
             --bg-1: #1f0307;
@@ -34,7 +34,6 @@
             position: relative;
         }
 
-        /* ---------- ambient scanline / grain ---------- */
         #scanline {
             position: absolute;
             inset: 0;
@@ -78,7 +77,6 @@
             z-index: 1;
         }
 
-        /* ---------- corner brackets w/ ticks ---------- */
         .hud-corner {
             position: absolute;
             width: 54px;
@@ -93,7 +91,6 @@
         .bottom-left { bottom: 22px; left: 22px; transform: scaleY(-1); }
         .bottom-right { bottom: 22px; right: 22px; transform: scale(-1, -1); }
 
-        /* ---------- top status strip ---------- */
         #top-bar {
             position: absolute;
             top: 0; left: 0; right: 0;
@@ -128,12 +125,7 @@
             letter-spacing: 2px;
             font-variant-numeric: tabular-nums;
         }
-        @media (max-width: 980px) {
-            #telemetry { display: none; }
-            #top-bar { padding: 16px 20px; }
-        }
 
-        /* ---------- LEFT DOCK — telemetry / voice link / memory array ---------- */
         #left-dock {
             position: absolute;
             top: 50%;
@@ -176,11 +168,6 @@
         .bar-seg { width: 6px; height: 12px; background: var(--hair); }
         .bar-seg.on { background: var(--core); box-shadow: 0 0 6px var(--core-glow); }
 
-        @media (max-width: 980px) {
-            #left-dock { display: none; }
-        }
-
-        /* ---------- file dropper ---------- */
         #drop-zone {
             position: absolute;
             top: 74px;
@@ -206,11 +193,6 @@
             box-shadow: 0 0 20px var(--core-glow);
         }
 
-        @media (max-width: 980px) {
-            #drop-zone { left: auto; right: 20px; top: 66px; width: 150px; }
-        }
-
-        /* ---------- RIGHT DOCK — comms / chatbox panel ---------- */
         #right-dock {
             position: absolute;
             top: 74px;
@@ -285,7 +267,6 @@
         .msg.system .who { color: var(--signal); text-shadow: 0 0 8px var(--signal-glow); }
         .msg.system .body { color: var(--ink-dim); font-style: italic; }
 
-        /* ---------- waveform ---------- */
         #waveform {
             display: flex;
             align-items: flex-end;
@@ -303,7 +284,6 @@
             transition: height 0.12s ease;
         }
 
-        /* ---------- command bar (docked at bottom of right panel) ---------- */
         #command-bar {
             display: flex;
             align-items: center;
@@ -356,17 +336,6 @@
             background: var(--core);
             color: var(--bg-0);
             box-shadow: 0 0 18px var(--core-glow);
-        }
-
-        @media (max-width: 980px) {
-            #right-dock {
-                left: 16px;
-                right: 16px;
-                width: auto;
-                top: auto;
-                height: 46vh;
-                bottom: 16px;
-            }
         }
     </style>
 </head>
@@ -445,9 +414,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // 1. FRIDAY QUANTUM CORE — 3D STRUCTURE
-        // ==========================================
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
 
@@ -461,7 +427,6 @@
         const coreGroup = new THREE.Group();
         scene.add(coreGroup);
 
-        // Drifting starfield — depth behind the core
         const starGeo = new THREE.BufferGeometry();
         const STAR_COUNT = 900;
         const starPositions = new Float32Array(STAR_COUNT * 3);
@@ -481,94 +446,89 @@
         const starField = new THREE.Points(starGeo, starMat);
         scene.add(starField);
 
-        // Central dense node
-        const coreGeo = new THREE.IcosahedronGeometry(0.72, 1);
-        const coreMat = new THREE.MeshBasicMaterial({
+        // ==========================================
+        // 3D MODEL: AIR STOP PET (Geometric Hover Drone)
+        // ==========================================
+        const petGroup = new THREE.Group();
+        coreGroup.add(petGroup);
+
+        // Central Body (Futuristic Quad Core / Capsule)
+        const bodyGeo = new THREE.ConeGeometry(0.5, 1.2, 6);
+        const bodyMat = new THREE.MeshBasicMaterial({
             color: 0xff2a2a,
             wireframe: true,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending
+        });
+        const petBody = new THREE.Mesh(bodyGeo, bodyMat);
+        petBody.rotation.x = Math.PI; // Pointed downward like a hover-stop craft
+        petGroup.add(petBody);
+
+        // Counter-rotating propeller ring
+        const propRingGeo = new THREE.TorusGeometry(0.85, 0.03, 16, 64);
+        const propRingMat = new THREE.MeshBasicMaterial({
+            color: 0xff9900,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending
+        });
+        const propRing = new THREE.Mesh(propRingGeo, propRingMat);
+        propRing.rotation.x = Math.PI / 2;
+        petGroup.add(propRing);
+
+        // Sensor Eye (Air Stop Core)
+        const eyeGeo = new THREE.SphereGeometry(0.25, 16, 16);
+        const eyeMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
             transparent: true,
             opacity: 0.95,
             blending: THREE.AdditiveBlending
         });
-        const innerMind = new THREE.Mesh(coreGeo, coreMat);
-        coreGroup.add(innerMind);
+        const petEye = new THREE.Mesh(eyeGeo, eyeMat);
+        petEye.position.set(0, 0, 0.35);
+        petGroup.add(petEye);
 
-        // Organic shifting neural shell
-        const shellGeo = new THREE.IcosahedronGeometry(1.35, 3);
-        const shellMat = new THREE.MeshBasicMaterial({
-            color: 0xff2a2a,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.28,
-            blending: THREE.AdditiveBlending
-        });
-        const neuralShell = new THREE.Mesh(shellGeo, shellMat);
-        coreGroup.add(neuralShell);
-
-        const positionAttribute = shellGeo.attributes.position;
-        const originalVertices = [];
-        for (let i = 0; i < positionAttribute.count; i++) {
-            originalVertices.push(new THREE.Vector3(
-                positionAttribute.getX(i),
-                positionAttribute.getY(i),
-                positionAttribute.getZ(i)
-            ));
-        }
-
-        // Signature element: two tilted orbital rings with node particles
-        function buildRing(radius, tilt, color, nodeCount) {
+        // Orbital stabilization shields
+        function buildShieldRing(radius, tilt, color) {
             const group = new THREE.Group();
-            const ringGeo = new THREE.RingGeometry(radius - 0.01, radius, 128, 1);
+            const ringGeo = new THREE.RingGeometry(radius - 0.02, radius, 64, 1);
             const ringMat = new THREE.MeshBasicMaterial({
-                color, side: THREE.DoubleSide, transparent: true, opacity: 0.18,
+                color, side: THREE.DoubleSide, transparent: true, opacity: 0.25,
                 blending: THREE.AdditiveBlending, wireframe: true
             });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             group.add(ring);
-
-            const nodeGeo = new THREE.SphereGeometry(0.028, 8, 8);
-            const nodeMat = new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending });
-            const nodes = [];
-            for (let i = 0; i < nodeCount; i++) {
-                const node = new THREE.Mesh(nodeGeo, nodeMat);
-                const angle = (i / nodeCount) * Math.PI * 2;
-                node.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
-                group.add(node);
-                nodes.push(node);
-            }
             group.rotation.x = tilt;
-            coreGroup.add(group);
-            return { group, nodes, radius };
+            petGroup.add(group);
+            return group;
         }
 
-        const ringA = buildRing(2.05, Math.PI / 2.6, 0xff2a2a, 10);
-        const ringB = buildRing(2.55, Math.PI / 1.7, 0xff9900, 6);
+        const shieldA = buildShieldRing(1.4, Math.PI / 3, 0xff2a2a);
+        const shieldB = buildShieldRing(1.8, Math.PI / 1.5, 0xff9900);
 
-        // Expanding activation pulses (spawned on tap/click)
         const activePulses = [];
         function spawnPulse(color) {
-            const geo = new THREE.RingGeometry(0.9, 0.98, 64);
+            const geo = new THREE.RingGeometry(0.6, 0.7, 64);
             const mat = new THREE.MeshBasicMaterial({
                 color, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
                 blending: THREE.AdditiveBlending
             });
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.rotation.x = Math.PI / 2.4;
-            coreGroup.add(mesh);
+            petGroup.add(mesh);
             activePulses.push({ mesh, life: 0 });
         }
 
         let targetScale = 1;
-        let baseSpeed = 0.003;
+        let baseSpeed = 0.02;
         let activeSpeedMult = 1;
         let hovered = false;
 
-        // ---- Tap / click the core to wake FRIDAY ----
-        // Invisible, slightly oversized sphere = a forgiving hit target (helps on mobile/trackpad)
         const hitSphereGeo = new THREE.SphereGeometry(1.55, 16, 16);
         const hitSphereMat = new THREE.MeshBasicMaterial({ visible: false });
         const hitSphere = new THREE.Mesh(hitSphereGeo, hitSphereMat);
-        coreGroup.add(hitSphere);
+        petGroup.add(hitSphere);
 
         const raycaster = new THREE.Raycaster();
         const pointerVec = new THREE.Vector2();
@@ -607,7 +567,6 @@
             }
         }, { passive: true });
 
-        // ---- Tiny synthesized activation chirp (no audio assets needed) ----
         let audioCtx = null;
         function playChirp(wakingUp) {
             try {
@@ -625,7 +584,7 @@
                 gain.connect(audioCtx.destination);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.22);
-            } catch (e) { /* audio unavailable, fail silently */ }
+            } catch (e) {}
         }
 
         function animate() {
@@ -633,35 +592,22 @@
             const speed = baseSpeed * activeSpeedMult;
             const time = Date.now() * 0.001;
 
-            innerMind.rotation.x += speed * 2.0;
-            innerMind.rotation.y += speed * 2.5;
+            // Hover floating motion & dynamic tilt
+            petGroup.position.y = Math.sin(time * 2.5) * 0.2;
+            petGroup.position.x = Math.cos(time * 1.5) * 0.15;
+            petGroup.rotation.z = Math.sin(time * 1.2) * 0.1;
+            petGroup.rotation.y += speed * 0.5;
 
-            neuralShell.rotation.y -= speed * 1.2;
-            neuralShell.rotation.z += speed * 0.8;
+            propRing.rotation.z += speed * 5.0;
+            shieldA.rotation.z += speed * 1.5;
+            shieldB.rotation.z -= speed * 1.2;
 
-            for (let i = 0; i < positionAttribute.count; i++) {
-                const v = originalVertices[i];
-                const noise = Math.sin(v.x * 2 + time) * Math.cos(v.y * 2 + time) * 0.18;
-                const currentV = v.clone().normalize().multiplyScalar(1.35 + noise);
-                positionAttribute.setXYZ(i, currentV.x, currentV.y, currentV.z);
-            }
-            positionAttribute.needsUpdate = true;
-
-            ringA.group.rotation.z += speed * 1.1;
-            ringB.group.rotation.z -= speed * 0.7;
-
-            // Hover glow: gentle brighten + scale nudge when the pointer is over the core
             const hoverTarget = hovered ? 1.08 : 1;
-            coreGroup.scale.lerp(new THREE.Vector3(targetScale * hoverTarget, targetScale * hoverTarget, targetScale * hoverTarget), 0.1);
-            coreMat.opacity += ((hovered ? 1 : 0.9) - coreMat.opacity) * 0.1;
+            petGroup.scale.lerp(new THREE.Vector3(targetScale * hoverTarget, targetScale * hoverTarget, targetScale * hoverTarget), 0.1);
 
-            coreGroup.rotation.y = Math.sin(time * 0.15) * 0.15;
-
-            // Slow ambient starfield drift
             starField.rotation.y += 0.00025;
             starField.rotation.x += 0.00008;
 
-            // Expanding activation pulses
             for (let i = activePulses.length - 1; i >= 0; i--) {
                 const p = activePulses[i];
                 p.life += 0.02;
@@ -669,7 +615,7 @@
                 p.mesh.scale.set(s, s, s);
                 p.mesh.material.opacity = Math.max(0, 0.9 - p.life * 1.1);
                 if (p.life >= 1) {
-                    coreGroup.remove(p.mesh);
+                    petGroup.remove(p.mesh);
                     p.mesh.geometry.dispose();
                     p.mesh.material.dispose();
                     activePulses.splice(i, 1);
@@ -686,9 +632,6 @@
             camera.updateProjectionMatrix();
         });
 
-        // ==========================================
-        // 2. DECORATIVE TELEMETRY (ambient life)
-        // ==========================================
         function fillBars(id, total, onCount) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -709,7 +652,6 @@
         randomizeTelemetry();
         setInterval(randomizeTelemetry, 2200);
 
-        // Live clock, top bar
         function updateClock() {
             const el = document.getElementById('hud-clock');
             if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -717,7 +659,6 @@
         updateClock();
         setInterval(updateClock, 1000);
 
-        // Waveform bars
         const waveformEl = document.getElementById('waveform');
         const WAVE_BARS = 28;
         const waveEls = [];
@@ -738,16 +679,12 @@
         }
         animateWaveform();
 
-        // ==========================================
-        // 3. FRIDAY HUD LOGIC
-        // ==========================================
         const messageLog = document.getElementById('message-log');
         const statusDiv = document.getElementById('status');
         const chatInput = document.getElementById('chat-input');
         const dropZone = document.getElementById('drop-zone');
         const voiceLinkStatus = document.getElementById('voice-link-status');
 
-        // Appends a line to the right-hand comms panel and auto-scrolls to it
         function addMessage(kind, who, text) {
             const row = document.createElement('div');
             row.className = 'msg ' + kind;
@@ -815,15 +752,14 @@
         }
 
         function setVisualTheme(mode) {
-            // mode: "core" (red, idle/standby) or "signal" (orange gold, processing)
             const isSignal = mode === "signal";
             targetScale = isSignal ? 1.22 : 1;
             activeSpeedMult = isSignal ? 4 : 1;
             waveActive = isSignal;
 
             const hex = isSignal ? 0xff9900 : 0xff2a2a;
-            coreMat.color.setHex(hex);
-            shellMat.color.setHex(hex);
+            bodyMat.color.setHex(hex);
+            propRing.material.color.setHex(isSignal ? 0xff2a2a : 0xff9900);
 
             document.documentElement.style.setProperty('--core', isSignal ? '#ff9900' : '#ff2a2a');
             document.documentElement.style.setProperty('--core-glow', isSignal ? 'rgba(255,153,0,0.75)' : 'rgba(255,42,42,0.75)');
@@ -868,7 +804,6 @@
             }
         };
 
-        // Check health & connectivity on page load
         async function checkHealthAndConnectivity() {
             try {
                 const res = await fetch('/health');
@@ -887,22 +822,6 @@
         }
         checkHealthAndConnectivity();
 
-        // Check microphone permission capability
-        async function checkMicrophonePermission() {
-            try {
-                if (navigator.permissions && navigator.permissions.query) {
-                    const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
-                    if (permissionStatus.state === 'denied') {
-                        addMessage('system', 'System', 'Warning: Microphone permission is denied. Voice input will fail.');
-                    }
-                }
-            } catch (e) {
-                // Permissions API query not supported for mic in some browsers
-            }
-        }
-        checkMicrophonePermission();
-
-        // Fetch available models from backend
         async function loadAvailableModels() {
             try {
                 const res = await fetch('/api/models');
@@ -941,11 +860,6 @@
                 const data = await response.json();
                 if (!response.ok) {
                     let errMsg = data.detail || 'The AI service is unavailable.';
-                    if (response.status === 401) {
-                        statusDiv.textContent = 'GEMINI AUTH FAILURE';
-                    } else if (response.status === 502 || response.status === 504) {
-                        statusDiv.textContent = 'GEMINI REQUEST FAILURE';
-                    }
                     throw new Error(errMsg);
                 }
                 addMessage('ai', 'Friday', data.response);
@@ -960,23 +874,18 @@
 
             } catch (error) {
                 addMessage('system', 'System', error.message || 'The backend could not process the command.');
-                if (statusDiv.textContent === 'PROCESSING PROTOCOL...') {
-                    statusDiv.textContent = "AI LINK UNAVAILABLE";
-                }
+                statusDiv.textContent = "AI LINK UNAVAILABLE";
                 systemState = "OFF";
                 waveActive = false;
             }
         }
 
-        // ==========================================
-        // 4. BOOT SEQUENCE — plays once on page load
-        // ==========================================
         (function bootSequence() {
             const lines = [
-                "INITIALIZING CRIMSON CORE MATRIX...",
-                "CALIBRATING QUANTUM NEURAL SHELL...",
+                "INITIALIZING AIR STOP PET PROTOCOLS...",
+                "CALIBRATING HOVER STABILIZERS...",
                 "UPLINK ESTABLISHED.",
-                "Tap the core, or say 'FRIDAY', to wake me."
+                "Tap the pet, or say 'FRIDAY', to wake me."
             ];
             let li = 0, ci = 0;
             statusDiv.textContent = "BOOTING";
