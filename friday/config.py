@@ -51,6 +51,8 @@ KOKORO_MODEL = ROOT / "data" / "voices" / "kokoro-v1.0.int8.onnx"
 KOKORO_VOICES = ROOT / "data" / "voices" / "voices-v1.0.bin"
 TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
 TTS_MAX_CHARS = 600
+# Ultron can be voiced by Gemini (acted delivery, ~4 s, free-tier quota) instead of Kokoro (instant, less acting).
+ULTRON_VOICE_ENGINE = os.getenv("ULTRON_VOICE_ENGINE", "kokoro")
 STT_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash"]   # cloud fallback for speech-to-text
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")   # local speech-to-text, ~0.3 s per sentence
 WHISPER_DIR = ROOT / "data" / "models"

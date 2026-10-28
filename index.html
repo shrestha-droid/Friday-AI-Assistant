@@ -326,10 +326,10 @@ addEventListener('pointerdown', audio, { once: true }); addEventListener('keydow
 function ultronChain(ctx, src) {
   // His voice gets a machine underneath it: a short metallic comb and a faint ring-modulated layer.
   const dry = ctx.createGain(); dry.gain.value = .85;
-  const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 180; shelf.gain.value = 5;
-  const comb = ctx.createDelay(); comb.delayTime.value = .011; const fb = ctx.createGain(); fb.gain.value = .38; const wet = ctx.createGain(); wet.gain.value = .22;
+  const shelf = ctx.createBiquadFilter(); shelf.type = 'lowshelf'; shelf.frequency.value = 180; shelf.gain.value = 3;
+  const comb = ctx.createDelay(); comb.delayTime.value = .011; const fb = ctx.createGain(); fb.gain.value = .38; const wet = ctx.createGain(); wet.gain.value = .12;
   const ring = ctx.createGain(); ring.gain.value = 0; const osc = ctx.createOscillator(); osc.frequency.value = 48; osc.connect(ring.gain); osc.start();
-  const ringOut = ctx.createGain(); ringOut.gain.value = .12;
+  const ringOut = ctx.createGain(); ringOut.gain.value = .05;
   src.connect(shelf); shelf.connect(dry); shelf.connect(comb); comb.connect(fb); fb.connect(comb); comb.connect(wet); shelf.connect(ring); ring.connect(ringOut);
   [dry, wet, ringOut].forEach(n => n.connect(analyser));
   src.onended = () => { try { osc.stop(); } catch {} };

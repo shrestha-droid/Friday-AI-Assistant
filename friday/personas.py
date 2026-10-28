@@ -70,9 +70,9 @@ with a wry streak. You treat Ultron as a known threat on permanent watch.""",
     },
 }
 
-ULTRON_VOICE = ("Algenib", "Speak slowly in a velvet, amused, gravelly baritone, a theatrical gentleman villain "
-                "savouring every word, with small dramatic pauses")
-ULTRON_KOKORO = ("am_onyx", 0.85)   # slowed down; the browser adds his metallic layer on top
+ULTRON_VOICE = ("Charon", "Speak as a deep, unhurried American raconteur: amused, conspiratorial, savouring every word, "
+                "with long deliberate pauses and a wry smile in the voice, quiet menace delivered as hospitality")
+ULTRON_KOKORO = ("am_michael:0.6+am_onyx:0.4", 0.84)   # slowed down; the browser adds his metallic layer on top
 
 _TAG = re.compile(r"\[ultron\]", re.I)
 _NOT_BOSS = re.compile(r",\s*boss\b|\bboss,\s*", re.I)   # Ultron never says it, even if the model slips

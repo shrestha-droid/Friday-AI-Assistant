@@ -234,7 +234,12 @@ async def tts(req: SpeakRequest):
     if key not in _tts_cache:
         said = personas.spoken(text)
         wav = engine = None
-        if tts_local.available():
+        if req.who == "ultron" and config.ULTRON_VOICE_ENGINE == "gemini":
+            try:
+                wav, engine = await llm.speak(said, *personas.voice_for(req.who)), "gemini"
+            except LLMError:
+                logger.warning("gemini voice for Ultron failed, using Kokoro")
+        if wav is None and tts_local.available():
             try:
                 wav, engine = await asyncio.to_thread(tts_local.speak, said, *personas.kokoro_voice_for(req.who)), "kokoro"
             except Exception:
